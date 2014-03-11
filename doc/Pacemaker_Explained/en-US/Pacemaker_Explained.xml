@@ -1,0 +1,47 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE Book PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+]>
+<book>
+  <xi:include href="Book_Info.xml" xmlns:xi="http://www.w3.org/2001/XInclude"></xi:include>
+  <xi:include href="Preface.xml" xmlns:xi="http://www.w3.org/2001/XInclude"></xi:include>
+
+  <xi:include href="Ch-Intro.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Basics.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Options.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Nodes.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Resources.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Constraints.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Notifications.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Rules.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Advanced-Options.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Advanced-Resources.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Utilization.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Resource-Templates.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Stonith.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Status.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ch-Multi-site-Clusters.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+
+  <xi:include href="Ap-FAQ.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ap-OCF.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ap-Changes.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ap-Install.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ap-Upgrade.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ap-Upgrade-Config.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ap-LSB.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <xi:include href="Ap-Samples.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+  <appendix id="ap-further-reading">
+    <title>Further Reading</title>
+    <itemizedlist spacing="compact">
+      <listitem><para>Project Website <ulink url="http://www.clusterlabs.org/"/></para></listitem>
+      <listitem><para>Project Documentation <ulink url="http://www.clusterlabs.org/wiki/Documentation"/></para></listitem>
+      <listitem>
+        <para>A comprehensive guide to cluster commands has been written by Novell<footnote><para><ulink url="http://www.suse.com/documentation/sle_ha/book_sleha/data/book_sleha.html"/></para></footnote></para>
+      </listitem>
+      <listitem><para>Heartbeat configuration: <ulink url="http://www.linux-ha.org/"/></para></listitem>
+      <listitem><para>Corosync Configuration: <ulink url="http://www.corosync.org/"/></para></listitem>
+    </itemizedlist>
+  </appendix>
+
+  <xi:include href="Revision_History.xml" xmlns:xi="http://www.w3.org/2001/XInclude"></xi:include>
+  <index></index>
+</book>

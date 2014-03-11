@@ -1,0 +1,52 @@
+See also:
+   http://powerman.name/doc/asciidoc
+
+Commands:    `some-tool --with option`
+Files:       '/tmp/file.name' 
+Italic:	     _some text_
+Mono:        +some text+
+Bold:        *some text*
+Super:	     ^some text^
+Sub:	     ~some text~
+Quotes:
+             ``double quoted''
+              `single quoted'
+
+Tool:        command
+Literal:     mono
+Varname:     mono
+Option:      italic
+Emphasis:    italic bold
+Replaceable: italic mono 
+
+
+.Title for Eaxmple
+=====
+Some text
+=====
+
+.Title for Eaxmple with XML Listing
+=====
+[source,XML]
+-----
+<some xml=here/>
+-----
+=====
+
+Naked code listing:
+(Use 'C' and a leading '#' instead of 'Bash' when commands are being show)
+
+[source,C]
+-----
+# some command --here
+-----
+
+
+Section anchors:
+
+[[s-name]]
+=== Some Section Title ===
+
+References to section anchors:
+
+<<s-name>> or <<s-name,Alternate Text>>

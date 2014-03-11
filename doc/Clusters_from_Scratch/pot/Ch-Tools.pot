@@ -1,0 +1,146 @@
+# 
+# AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: 0\n"
+"POT-Creation-Date: 2012-10-17T05:19:03\n"
+"PO-Revision-Date: 2012-10-17T05:19:03\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: None\n"
+"MIME-Version: 1.0\n"
+"Content-Type: application/x-publican; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Tag: title
+#, no-c-format
+msgid "Pacemaker Tools"
+msgstr ""
+
+#. Tag: title
+#, no-c-format
+msgid "Using Pacemaker Tools"
+msgstr ""
+
+#. Tag: para
+#, no-c-format
+msgid "In the dark past, configuring Pacemaker required the administrator to read and write XML. In true UNIX style, there were also a number of different commands that specialized in different aspects of querying and updating the cluster."
+msgstr ""
+
+#. Tag: para
+#, no-c-format
+msgid "All of that has been greatly simplified with the creation of unified command-line shells (and GUIs) that hide all the messy XML scaffolding."
+msgstr ""
+
+#. Tag: para
+#, no-c-format
+msgid "These shells take all the individual aspects required for managing and configuring a cluster, and packs them into one simple to use command line tool."
+msgstr ""
+
+#. Tag: para
+#, no-c-format
+msgid "They even allow you to queue up several changes at once and commit them atomically."
+msgstr ""
+
+#. Tag: para
+#, no-c-format
+msgid "There are currently two command-line shells that people use, <literal>pcs</literal> and <literal>crmsh</literal>. This edition of Clusters from Scratch is based on <literal>pcs</literal>. Start by taking some time to familiarize yourself with what it can do."
+msgstr ""
+
+#. Tag: para
+#, no-c-format
+msgid "The two shells share many concepts but the scope, layout and syntax does differ, so make sure you read the version of this guide that corresponds to the software installed on your system."
+msgstr ""
+
+#. Tag: para
+#, no-c-format
+msgid "Since <literal>pcs</literal> has the ability to manage all aspects of the cluster (both corosync and pacemaker), it requires a specific cluster stack to be in use, (corosync 2.0 with votequorum + Pacemaker version &gt;= 1.8)."
+msgstr ""
+
+#. Tag: programlisting
+#, no-c-format
+msgid "# pcs"
+msgstr ""
+
+#. Tag: literallayout
+#, no-c-format
+msgid "Control and configure pacemaker and corosync.\n"
+"\n"
+"Options:\n"
+"    -h          Display usage and exit\n"
+"    -f file     Perform actions on file instead of active CIB\n"
+"\n"
+"Commands:\n"
+"    resource    Manage cluster resources\n"
+"    cluster     Configure cluster options and nodes\n"
+"    stonith     Configure fence devices\n"
+"    property    Set pacemaker properties\n"
+"    constraint  Set resource constraints\n"
+"    status      View cluster status"
+msgstr ""
+
+#. Tag: para
+#, no-c-format
+msgid "As you can see, the different aspects of cluster management are broken up into categories: resource, cluster, stonith, property, constraint, and status. To discover the functionality available in each of these categories, one can issue the command <emphasis>pcs &lt;category&gt; help</emphasis>. Below is an example of all the options available under the status category."
+msgstr ""
+
+#. Tag: programlisting
+#, no-c-format
+msgid "# pcs status help"
+msgstr ""
+
+#. Tag: literallayout
+#, no-c-format
+msgid "Usage: pcs status [commands]...\n"
+"View current cluster and resource status\n"
+"Commands:\n"
+"    status\n"
+"        View all information about the cluster and resources\n"
+"\n"
+"    status resources\n"
+"        View current status of cluster resources\n"
+"\n"
+"    status groups\n"
+"        View currently configured groups and their resources\n"
+"\n"
+"    status cluster\n"
+"        View current cluster status\n"
+"\n"
+"    status corosync\n"
+"        View current corosync status\n"
+"\n"
+"    status nodes [corosync]\n"
+"        View current status of nodes from pacemaker, or if corosync is\n"
+"        specified, print nodes currently configured in corosync\n"
+"\n"
+"    status actions\n"
+"        View failed actions\n"
+"\n"
+"    status pcsd &lt;node&gt; ...\n"
+"        Show the current status of pcsd on the specified nodes\n"
+"\n"
+"    status xml\n"
+"        View xml version of status (output from crm_mon -r -1 -X)"
+msgstr ""
+
+#. Tag: para
+#, no-c-format
+msgid "Additionally, if you are interested in the Pacemaker version and supported cluster stack(s) available with your current Pacemaker installation, the pacemakerd --features option is available to you."
+msgstr ""
+
+#. Tag: programlisting
+#, no-c-format
+msgid "# pacemakerd --features"
+msgstr ""
+
+#. Tag: screen
+#, no-c-format
+msgid "Pacemaker 1.1.8 (Build: 434edfa)\n"
+" Supporting:  generated-manpages agent-manpages ascii-docs publican-docs ncurses gcov libqb-logging libqb-ipc lha-fencing upstart systemd  heartbeat corosync-native snmp"
+msgstr ""
+
+#. Tag: para
+#, no-c-format
+msgid "If the SNMP and/or email options are not listed, then Pacemaker was not built to support them. This may be by the choice of your distribution or the required libraries may not have been available. Please contact whoever supplied you with the packages for more details."
+msgstr ""
+

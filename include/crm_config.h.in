@@ -1,0 +1,102 @@
+/* crm_config.h.in */
+
+/* 
+ * Copyright (C) 2006 - 2007
+ *     Andrew Beekhof <andrew@beekhof.net>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+#ifndef CRM_CONFIG__H__IN
+#define CRM_CONFIG__H__IN
+
+/****** Versions ******/
+
+/* Current pacemaker version */
+#undef PACEMAKER_VERSION
+
+/* Build version */
+#undef BUILD_VERSION
+
+/* Current version of the Pacemaker Relax-NG Schema */
+#undef CRM_DTD_VERSION
+
+/****** Other ******/
+
+/* Group to run Pacemaker daemons as */
+#undef CRM_DAEMON_GROUP
+
+/* User to run Pacemaker daemons as */
+#undef CRM_DAEMON_USER
+
+/****** Directories ******/
+
+/* Location for Pacemaker daemons */
+#undef CRM_DAEMON_DIR
+
+/* Where to keep blackbox dumps */
+#undef CRM_BLACKBOX_DIR
+
+/* Where to keep configuration files */
+#undef CRM_CONFIG_DIR
+
+/* Where to keep PEngine outputs */
+#undef PE_STATE_DIR
+
+/* Location to store core files produced by Pacemaker daemons */
+#undef CRM_CORE_DIR
+
+/* Where to keep state files and sockets */
+#undef CRM_STATE_DIR
+
+/* Location for the Pacemaker Relax-NG Schema */
+#undef CRM_DTD_DIRECTORY
+
+/****** Features ******/
+
+/* Set of enabled features */
+#undef CRM_FEATURES
+
+/* Support the Heartbeat messaging and membership layer */
+#undef SUPPORT_HEARTBEAT
+
+/* Support the Corosync messaging and membership layer */
+#undef SUPPORT_COROSYNC
+
+/* Support the Pacemaker plugin for Corosync */
+#undef SUPPORT_PLUGIN
+
+/* Support the consumption of membership and quorum from corosync */
+#undef SUPPORT_CS_QUORUM
+
+/* Support systemd based system services */
+#undef SUPPORT_SYSTEMD
+
+/* Support upstart based system services */
+#undef SUPPORT_UPSTART
+
+
+/****** Compatability ******/
+
+/* Does corosync use libqb for its ipc */
+#undef CS_USES_LIBQB
+
+/* Compatability alias for SUPPORT_COROSYNC */
+#undef SUPPORT_AIS
+
+/* Compatability alias for SUPPORT_COROSYNC */
+#undef AIS_COROSYNC
+
+#endif /* CRM_CONFIG__H__IN */
