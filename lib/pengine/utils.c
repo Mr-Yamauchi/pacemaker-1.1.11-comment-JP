@@ -423,6 +423,7 @@ custom_action(resource_t * rsc, char *key, const char *task,
         action->meta = g_hash_table_new_full(crm_str_hash, g_str_equal, free, free);
 
         if (save_action) {
+			/* data_setのアクション情報に生成したアクションを追加する */
             data_set->actions = g_list_prepend(data_set->actions, action);
         }
 

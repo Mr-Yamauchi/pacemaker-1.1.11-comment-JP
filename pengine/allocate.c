@@ -1144,13 +1144,14 @@ sort_rsc_process_order(gconstpointer a, gconstpointer b, gpointer data)
               resource2->id, r2_weight, node ? node->details->id : "n/a", reason);
     return rc;
 }
-
+/* リソースの配置先を決定する */
 static void
 allocate_resources(pe_working_set_t * data_set)
 {
     GListPtr gIter = data_set->resources;
 
     if (is_set(data_set->flags, pe_flag_have_remote_nodes)) {
+		/* リモートリソース(type="remote")の配置先を決定する */
         /* Force remote connection resources to be allocated first. This
          * also forces any colocation dependencies to be allocated as well */
         for (gIter = data_set->resources; gIter != NULL; gIter = gIter->next) {
@@ -1159,17 +1160,20 @@ allocate_resources(pe_working_set_t * data_set)
                 continue;
             }
             pe_rsc_trace(rsc, "Allocating: %s", rsc->id);
+            /* リソースのcolorを実行する */
             rsc->cmds->allocate(rsc, NULL, data_set);
         }
     }
 
     /* now do the rest of the resources */
     for (gIter = data_set->resources; gIter != NULL; gIter = gIter->next) {
+		/* 通常リソースの配置先を決定する */
         resource_t *rsc = (resource_t *) gIter->data;
         if (rsc->is_remote_node == TRUE) {
             continue;
         }
         pe_rsc_trace(rsc, "Allocating: %s", rsc->id);
+        /* リソースのcolorを実行する */
         rsc->cmds->allocate(rsc, NULL, data_set);
     }
 }
@@ -1199,7 +1203,7 @@ stage5(pe_working_set_t * data_set)
 
     crm_trace("Allocating services");
     /* Take (next) highest resource, assign it and create its actions */
-
+	/* リソースの配置先を決定する */
     allocate_resources(data_set);
 
     gIter = data_set->nodes;
@@ -1249,7 +1253,7 @@ stage5(pe_working_set_t * data_set)
     }
 
     crm_trace("Creating actions");
-
+	/* リソースの実行アクションを生成する */
     gIter = data_set->resources;
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *rsc = (resource_t *) gIter->data;
@@ -1478,7 +1482,7 @@ find_actions_by_task(GListPtr actions, resource_t * rsc, const char *original_ke
 
     return list;
 }
-
+/* order制約情報のthenリソース指定がある制約(firstリソース指定がない)を処理する */
 static void
 rsc_order_then(action_t * lh_action, resource_t * rsc, order_constraint_t * order)
 {
@@ -1520,6 +1524,7 @@ rsc_order_then(action_t * lh_action, resource_t * rsc, order_constraint_t * orde
         action_t *rh_action_iter = (action_t *) gIter->data;
 
         if (lh_action) {
+			/* firstリソースのアクション情報がある場合は、firstのアクションとthenアクションの前後関係情報をセットする */
             order_actions(lh_action, rh_action_iter, type);
 
         } else if (type & pe_order_implies_then) {
@@ -1532,26 +1537,29 @@ rsc_order_then(action_t * lh_action, resource_t * rsc, order_constraint_t * orde
 
     g_list_free(rh_actions);
 }
-
+/* order制約情報のfirstリソース指定がある制約を処理する */
 static void
 rsc_order_first(resource_t * lh_rsc, order_constraint_t * order, pe_working_set_t * data_set)
 {
     GListPtr gIter = NULL;
     GListPtr lh_actions = NULL;
-    action_t *lh_action = order->lh_action;
-    resource_t *rh_rsc = order->rh_rsc;
+    action_t *lh_action = order->lh_action;	/* first指定リソースのaction情報を取り出す */
+    resource_t *rh_rsc = order->rh_rsc;		/* then指定リソースの情報を取り出す */
 
     crm_trace("Processing LH of ordering constraint %d", order->id);
     CRM_ASSERT(lh_rsc != NULL);
 
     if (lh_action != NULL) {
+		/* first指定リソースのaction情報がある場合は、リストに追加 */
         lh_actions = g_list_prepend(NULL, lh_action);
 
     } else if (lh_action == NULL) {
+		/* ない場合は、firstリソースのアクション情報から対象アクションを検索してリストに取得 */
         lh_actions = find_actions_by_task(lh_rsc->actions, lh_rsc, order->lh_action_task);
     }
 
     if (lh_actions == NULL && lh_rsc != rh_rsc) {
+		/* リストが空（アクション情報がない）で、firstとthenリソースが違う場合 */
         char *key = NULL;
         char *rsc_id = NULL;
         char *op_type = NULL;
@@ -1561,16 +1569,19 @@ rsc_order_first(resource_t * lh_rsc, order_constraint_t * order, pe_working_set_
         key = generate_op_key(lh_rsc->id, op_type, interval);
 
         if (lh_rsc->fns->state(lh_rsc, TRUE) == RSC_ROLE_STOPPED && safe_str_eq(op_type, RSC_STOP)) {
+			/* すでにfirstリソースが停止していて、STOPのorderの場合は処理不要 */
             free(key);
             pe_rsc_trace(lh_rsc, "No LH-Side (%s/%s) found for constraint %d with %s - ignoring",
                          lh_rsc->id, order->lh_action_task, order->id, order->rh_action_task);
 
         } else if (lh_rsc->fns->state(lh_rsc, TRUE) == RSC_ROLE_SLAVE && safe_str_eq(op_type, RSC_DEMOTE)) {
+			/* すでにfirstリソースがSLAVE状態で、DEMOTEのorderの場合は処理不要 */
             free(key);
             pe_rsc_trace(lh_rsc, "No LH-Side (%s/%s) found for constraint %d with %s - ignoring",
                          lh_rsc->id, order->lh_action_task, order->id, order->rh_action_task);
 
         } else {
+			/* その他の場合(START,MASTERなど）は、リストにfirstリソースのアクションを追加する */
             pe_rsc_trace(lh_rsc, "No LH-Side (%s/%s) found for constraint %d with %s - creating",
                          lh_rsc->id, order->lh_action_task, order->id, order->rh_action_task);
             lh_action = custom_action(lh_rsc, key, op_type, NULL, TRUE, TRUE, data_set);
@@ -1580,18 +1591,21 @@ rsc_order_first(resource_t * lh_rsc, order_constraint_t * order, pe_working_set_
         free(op_type);
         free(rsc_id);
     }
-
+	/* リストをすべて処理する */
     gIter = lh_actions;
     for (; gIter != NULL; gIter = gIter->next) {
         action_t *lh_action_iter = (action_t *) gIter->data;
 
         if (rh_rsc == NULL && order->rh_action) {
+			/* thenリソース指定がなくて、thenアクションがある場合は、thenアクション情報からthenリソースをセットする */
             rh_rsc = order->rh_action->rsc;
         }
         if (rh_rsc) {
+			/* thenリソースがある場合は、thenリソース指定がある制約(firstリソース指定がない)を処理する */
             rsc_order_then(lh_action_iter, rh_rsc, order);
 
         } else if (order->rh_action) {
+			/* thenリソースが無くて、thenリソースのアクション情報がある場合、firstのアクションとthenアクションの前後関係情報をセットする */
             order_actions(lh_action_iter, order->rh_action, order->type);
         }
     }
@@ -1703,7 +1717,7 @@ apply_remote_node_ordering(pe_working_set_t *data_set)
         }
     }
 }
-
+/* アクションのorderを制御する */
 gboolean
 stage7(pe_working_set_t * data_set)
 {
@@ -1718,47 +1732,54 @@ stage7(pe_working_set_t * data_set)
      * Also g_list_prepend() has horrendous performance characteristics
      * So we need to use g_list_prepend() and then reverse the list here
      */
+    /* data_setに保存されているすべてのorder情報のリストを反転する */
     data_set->ordering_constraints = g_list_reverse(data_set->ordering_constraints);
-
+	/* 反転したorder情報をすべて処理する */
     gIter = data_set->ordering_constraints;
     for (; gIter != NULL; gIter = gIter->next) {
         order_constraint_t *order = (order_constraint_t *) gIter->data;
-        resource_t *rsc = order->lh_rsc;
+        resource_t *rsc = order->lh_rsc;	/* first指定リソースを取り出す */
 
         crm_trace("Applying ordering constraint: %d", order->id);
 
         if (rsc != NULL) {
             crm_trace("rsc_action-to-*");
+            /* first指定リソースがあるorder情報の場合 */
             rsc_order_first(rsc, order, data_set);
             continue;
         }
 
-        rsc = order->rh_rsc;
+        rsc = order->rh_rsc;				/* then指定リソースを取りだす *?
         if (rsc != NULL) {
+            /* then指定リソースがあるorder情報の場合 */
             crm_trace("action-to-rsc_action");
             rsc_order_then(order->lh_action, rsc, order);
 
         } else {
             crm_trace("action-to-action");
+            /* firstリソース指定、thenリソース指定がない、アクションのみのorderの場合 */
+            /* firstのアクションとthenアクションの前後関係情報をセットする */
             order_actions(order->lh_action, order->rh_action, order->type);
         }
     }
-
+	/* --- ここまでで、order制約によって、action情報の前後関係がセット完了されている --- */
+	/* --- action情報内のactions_afterリスト,actions_beforeリストにセット            --- */
     crm_trace("Updating %d actions", g_list_length(data_set->actions));
 
+	/* 今回の処理対象のdata_setにセットされたすべてのaction情報を処理する */
     gIter = data_set->actions;
     for (; gIter != NULL; gIter = gIter->next) {
         action_t *action = (action_t *) gIter->data;
-
+		/* 前後関係からアクション情報を更新する */
         update_action(action);
     }
 
     crm_trace("Processing migrations");
-
+	/* data_set内のすべてのリソースを処理する */
     gIter = data_set->resources;
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *rsc = (resource_t *) gIter->data;
-
+		/* 必要があれば、リソースのRelaod,Migrate処理を行う */
         rsc_migrate_reload(rsc, data_set);
         LogActions(rsc, data_set, FALSE);
     }
@@ -2371,6 +2392,7 @@ int transition_id = -1;
 /*
  * Create a dependency graph to send to the transitioner (via the CRMd)
  */
+/* グラフを生成する */
 gboolean
 stage8(pe_working_set_t * data_set)
 {

@@ -359,7 +359,7 @@ graph_update_action(action_t * first, action_t * then, node_t * node, enum pe_ac
 
     return changed;
 }
-
+/* １つのアクション情報の前後のアクション情報からアクション情報を更新する */
 gboolean
 update_action(action_t * then)
 {
@@ -377,9 +377,10 @@ update_action(action_t * then)
     if (is_set(then->flags, pe_action_requires_any)) {
         clear_bit(then->flags, pe_action_runnable);
     }
-
+	/* 対象アクション情報の前に実行するアクション情報のリストをすべて処理する */
     for (lpc = then->actions_before; lpc != NULL; lpc = lpc->next) {
         action_wrapper_t *other = (action_wrapper_t *) lpc->data;
+        /* 対象アクション情報の前に実行するアクション情報(firstアクションに該当)を取り出す */
         action_t *first = other->action;
 
         node_t *then_node = then->node;
@@ -389,6 +390,7 @@ update_action(action_t * then)
         enum pe_action_flags first_flags = 0;
 
         if (first->rsc && first->rsc->variant == pe_group && safe_str_eq(first->task, RSC_START)) {
+            /* traceログ出力のみ：firstリソースが指定されてて、groupリソースでfirstがSTART指定の場合 */
             first_node = first->rsc->fns->location(first->rsc, NULL, FALSE);
             if (first_node) {
                 crm_trace("First: Found node %s for %s", first_node->details->uname, first->uuid);
@@ -396,6 +398,7 @@ update_action(action_t * then)
         }
 
         if (then->rsc && then->rsc->variant == pe_group && safe_str_eq(then->task, RSC_START)) {
+            /* traceログ出力のみ：thenリソースが指定されてて、groupリソースでthenがSTART指定の場合 */
             then_node = then->rsc->fns->location(then->rsc, NULL, FALSE);
             if (then_node) {
                 crm_trace("Then: Found node %s for %s", then_node->details->uname, then->uuid);
@@ -406,6 +409,7 @@ update_action(action_t * then)
 
         if (first->rsc != then->rsc
             && first->rsc != NULL && then->rsc != NULL && first->rsc != then->rsc->parent) {
+			/* firstリソースとthenリソースが違うリソースで親子関係にない場合(groupリソースなどのorderでない場合) */
             first = rsc_expand_action(first);
         }
         if (first != other->action) {
