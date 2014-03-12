@@ -789,7 +789,7 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
 
     return NULL;
 }
-
+/* masterリソースの実行アクションを生成する */
 void
 master_create_actions(resource_t * rsc, pe_working_set_t * data_set)
 {
@@ -870,14 +870,19 @@ master_create_actions(resource_t * rsc, pe_working_set_t * data_set)
             /* If we ever wanted groups to have notifications we'd need to move this to native_internal_constraints() one day
              * Requires exposing *_notify
              */
+			/* clone_data->stop_notify->post_doneとclone_data->promote_notify->preのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(clone_data->stop_notify->post_done, clone_data->promote_notify->pre,
                           pe_order_optional);
+			/* clone_data->start_notify->post_doneとclone_data->promote_notify->preのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(clone_data->start_notify->post_done, clone_data->promote_notify->pre,
                           pe_order_optional);
+			/* clone_data->demote_notify->post_doneとclone_data->promote_notify->preのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(clone_data->demote_notify->post_done, clone_data->promote_notify->pre,
                           pe_order_optional);
+			/* clone_data->demote_notify->post_doneとclone_data->start_notify->preのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(clone_data->demote_notify->post_done, clone_data->start_notify->pre,
                           pe_order_optional);
+			/* clone_data->demote_notify->post_doneとclone_data->stop_notify->preのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(clone_data->demote_notify->post_done, clone_data->stop_notify->pre,
                           pe_order_optional);
         }

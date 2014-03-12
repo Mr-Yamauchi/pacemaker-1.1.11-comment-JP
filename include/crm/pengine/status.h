@@ -76,7 +76,7 @@ enum pe_find {
 #  define pe_flag_quick_location  	0x00100000ULL
 
 typedef struct pe_working_set_s {
-    xmlNode *input;
+    xmlNode *input;						/* 処理対象の生のCIB(XML)情報 */
     crm_time_t *now;
 
     /* options extracted from the input */
@@ -95,17 +95,17 @@ typedef struct pe_working_set_s {
     GHashTable *domains;
     GHashTable *tickets;
 
-    GListPtr nodes;
-    GListPtr resources;
-    GListPtr placement_constraints;
-    GListPtr ordering_constraints;
-    GListPtr colocation_constraints;
+    GListPtr nodes;						/* ノード情報のリスト */
+    GListPtr resources;					/* リソース情報のリスト */
+    GListPtr placement_constraints;		/* location制約情報のリスト */
+    GListPtr ordering_constraints;		/* order制約情報のリスト */
+    GListPtr colocation_constraints;	/* colocation制約情報のリスト */
     GListPtr ticket_constraints;
 
-    GListPtr actions;
-    xmlNode *failed;
-    xmlNode *op_defaults;
-    xmlNode *rsc_defaults;
+    GListPtr actions;					/* peningeの処理で生成されたすべて(psedo,resourceなど)の実行するべきアクション情報のリスト */
+    xmlNode *failed;					/* 故障情報のXML */
+    xmlNode *op_defaults;				/* CIBのop_defaultのXML */
+    xmlNode *rsc_defaults;				/* CIBのrsc_defaultのXML */
 
     /* stats */
     int num_synapse;
@@ -114,7 +114,7 @@ typedef struct pe_working_set_s {
     int action_id;
 
     /* final output */
-    xmlNode *graph;
+    xmlNode *graph;						/* 生成するグラフ情報 */
 
     GHashTable *template_rsc_sets;
     const char *localhost;
@@ -220,18 +220,18 @@ enum pe_action_flags {
 };
 /* *INDENT-ON* */
 
-struct resource_s {
+struct resource_s {											/* 単一リソースの情報 */
     char *id;
     char *clone_name;
     xmlNode *xml;
     xmlNode *orig_xml;
     xmlNode *ops_xml;
 
-    resource_t *parent;
+    resource_t *parent;										/* 親リソース情報へのポインタ */
     void *variant_opaque;
     enum pe_obj_types variant;
-    resource_object_functions_t *fns;
-    resource_alloc_functions_t *cmds;
+    resource_object_functions_t *fns;						/* リソース種別毎の処理へのポインタ(resource_class_functions[])*/
+    resource_alloc_functions_t *cmds;						/* リソース種別毎のコマンド処理へのポインタ(resource_class_alloc_functions[]) */
 
     enum rsc_recovery_type recovery_type;
     enum pe_restart restart_type;
@@ -247,25 +247,25 @@ struct resource_s {
 
     unsigned long long flags;
 
-    GListPtr rsc_cons_lhs;      /* rsc_colocation_t* */
-    GListPtr rsc_cons;          /* rsc_colocation_t* */
-    GListPtr rsc_location;      /* rsc_to_node_t*    */
-    GListPtr actions;           /* action_t*         */
+    GListPtr rsc_cons_lhs;      /* rsc_colocation_t* */		/* このリソースがrsc指定されているcolocation情報のリスト */
+    GListPtr rsc_cons;          /* rsc_colocation_t* */		/* このリソースがwith-rsc指定されているcolocation情報のリスト */
+    GListPtr rsc_location;      /* rsc_to_node_t*    */		/* このリソースのlocation情報のリスト */
+    GListPtr actions;           /* action_t*         */		/* peningeの処理で生成されたリソース単位の実行するべきアクション情報のリスト */
     GListPtr rsc_tickets;       /* rsc_ticket*       */
 
-    node_t *allocated_to;
-    GListPtr running_on;        /* node_t*   */
+    node_t *allocated_to;									/* リソースの配置先ノード情報 */
+    GListPtr running_on;        /* node_t*   */				/* リソースを実行中のノード情報のリスト */
     GHashTable *known_on;       /* node_t*   */
-    GHashTable *allowed_nodes;  /* node_t*   */
+    GHashTable *allowed_nodes;  /* node_t*   */				/* リソースの配置候補ノード情報のリスト */
 
-    enum rsc_role_e role;
-    enum rsc_role_e next_role;
+    enum rsc_role_e role;									/* 現在のロール */
+    enum rsc_role_e next_role;								/* 次の遷移先のロール */
 
     GHashTable *meta;
     GHashTable *parameters;
     GHashTable *utilization;
 
-    GListPtr children;          /* resource_t*   */
+    GListPtr children;          /* resource_t*   */			/* リソースの子リソース情報のリスト */
     GListPtr dangling_migrations;       /* node_t*       */
 
     node_t *partial_migration_target;
@@ -275,7 +275,7 @@ struct resource_s {
     GListPtr fillers;
 };
 
-struct pe_action_s {
+struct pe_action_s {										/* アクション情報 */
     int id;
     int priority;
 
@@ -301,8 +301,8 @@ struct pe_action_s {
     GHashTable *meta;
     GHashTable *extra;
 
-    GListPtr actions_before;    /* action_warpper_t* */
-    GListPtr actions_after;     /* action_warpper_t* */
+    GListPtr actions_before;    /* action_warpper_t* */		/* このアクションの前に実行するアクション情報のリスト */
+    GListPtr actions_after;     /* action_warpper_t* */		/* このアクションの後に実行するアクション情報のリスト */
 };
 
 struct ticket_s {

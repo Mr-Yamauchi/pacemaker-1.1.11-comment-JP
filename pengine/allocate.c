@@ -49,7 +49,7 @@ resource_alloc_functions_t resource_class_alloc_functions[] = {
      native_rsc_location,
      native_action_flags,
      native_update_actions,
-     native_expand,
+     native_expand,					/* nativeリソースのアクション情報のgraphへの展開処理 */
      native_append_meta,
      },
     {
@@ -63,7 +63,7 @@ resource_alloc_functions_t resource_class_alloc_functions[] = {
      group_rsc_location,
      group_action_flags,
      group_update_actions,
-     group_expand,
+     group_expand,					/* groupリソースのアクション情報のgraphへの展開処理 */
      group_append_meta,
      },
     {
@@ -77,7 +77,7 @@ resource_alloc_functions_t resource_class_alloc_functions[] = {
      clone_rsc_location,
      clone_action_flags,
      clone_update_actions,
-     clone_expand,
+     clone_expand,					/* clone/masterリソースのアクション情報のgraphへの展開処理 */
      clone_append_meta,
      },
     {
@@ -91,7 +91,7 @@ resource_alloc_functions_t resource_class_alloc_functions[] = {
      clone_rsc_location,
      clone_action_flags,
      clone_update_actions,
-     clone_expand,
+     clone_expand,					/* clone/masterリソースのアクション情報のgraphへの展開処理 */
      master_append_meta,
      }
 };
@@ -634,9 +634,9 @@ static void
 complex_set_cmds(resource_t * rsc)
 {
     GListPtr gIter = rsc->children;
-
+	/* リソース種別毎の処理へのポインタ(resource_class_alloc_functions)をセットする */
     rsc->cmds = &resource_class_alloc_functions[rsc->variant];
-
+	/* 子リソースがある場合は子リソースの種別毎の処理へのポインタ(resource_class_alloc_functions) */
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *child_rsc = (resource_t *) gIter->data;
 
@@ -858,8 +858,10 @@ probe_resources(pe_working_set_t * data_set)
             continue;
 
         } else if (probe_complete == NULL) {
+			/* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
             probe_complete = get_pseudo_op(CRM_OP_PROBED, data_set);
             if (is_set(data_set->flags, pe_flag_have_remote_nodes)) {
+				/* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
                 probe_cluster_nodes_complete = get_pseudo_op(CRM_OP_NODES_PROBED, data_set);
             }
         }
@@ -892,12 +894,15 @@ probe_resources(pe_working_set_t * data_set)
         }
 
         if (is_remote_node(node)) {
+			/* probe_node_completeとprobe_completeのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(probe_node_complete, probe_complete,
                       pe_order_runnable_left /*|pe_order_implies_then */ );
         } else if (probe_cluster_nodes_complete == NULL) {
+			/* probe_node_completeとprobe_completeのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(probe_node_complete, probe_complete,
                       pe_order_runnable_left /*|pe_order_implies_then */ );
         } else {
+			/* probe_node_completeとprobe_cluster_nodes_completeのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(probe_node_complete, probe_cluster_nodes_complete,
                       pe_order_runnable_left /*|pe_order_implies_then */ );
         }
@@ -1253,7 +1258,7 @@ stage5(pe_working_set_t * data_set)
     }
 
     crm_trace("Creating actions");
-	/* リソースの実行アクションを生成する */
+	/* リソース毎の実行アクションを生成する */
     gIter = data_set->resources;
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *rsc = (resource_t *) gIter->data;
@@ -1328,7 +1333,9 @@ stage6(pe_working_set_t * data_set)
     action_t *stonith_op = NULL;
     action_t *last_stonith = NULL;
     gboolean integrity_lost = FALSE;
+    /* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
     action_t *all_stopped = get_pseudo_op(ALL_STOPPED, data_set);
+    /* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
     action_t *done = get_pseudo_op(STONITH_DONE, data_set);
     gboolean need_stonith = TRUE;
     GListPtr gIter = data_set->nodes;
@@ -1362,6 +1369,7 @@ stage6(pe_working_set_t * data_set)
 
             } else {
                 if (last_stonith) {
+					/* last_stonithとstonith_opのactionの前後関係(actions_after,actions_after)のリストをセットする */
                     order_actions(last_stonith, stonith_op, pe_order_optional);
                 }
                 last_stonith = stonith_op;
@@ -1423,20 +1431,23 @@ stage6(pe_working_set_t * data_set)
             crm_debug("Ordering shutdown on %s before %s on %s",
                       node_stop->node->details->uname,
                       dc_down->task, dc_down->node->details->uname);
-
+			/* node_stopとdc_downのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(node_stop, dc_down, pe_order_optional);
         }
 
         if (last_stonith && dc_down != last_stonith) {
+			/* last_stonithとdc_downのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(last_stonith, dc_down, pe_order_optional);
         }
         g_list_free(shutdown_matches);
     }
 
     if (last_stonith) {
+		/* last_stonithとdoneのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(last_stonith, done, pe_order_implies_then);
 
     } else if (dc_fence) {
+		/* dc_downとdoneのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(dc_down, done, pe_order_implies_then);
     }
 
@@ -1482,7 +1493,7 @@ find_actions_by_task(GListPtr actions, resource_t * rsc, const char *original_ke
 
     return list;
 }
-/* order制約情報のthenリソース指定がある制約(firstリソース指定がない)を処理する */
+/* order制約情報のthenリソース指定がある制約を処理する */
 static void
 rsc_order_then(action_t * lh_action, resource_t * rsc, order_constraint_t * order)
 {
@@ -1601,7 +1612,7 @@ rsc_order_first(resource_t * lh_rsc, order_constraint_t * order, pe_working_set_
             rh_rsc = order->rh_action->rsc;
         }
         if (rh_rsc) {
-			/* thenリソースがある場合は、thenリソース指定がある制約(firstリソース指定がない)を処理する */
+			/* thenリソースがある場合は、thenリソース指定がある制約を処理する */
             rsc_order_then(lh_action_iter, rh_rsc, order);
 
         } else if (order->rh_action) {
@@ -1952,8 +1963,9 @@ pe_notify(resource_t * rsc, node_t * node, action_t * op, action_t * confirm,
     /* pseudo_notify before notify */
     pe_rsc_trace(rsc, "Ordering %s before %s (%d->%d)", op->uuid, trigger->uuid, trigger->id,
                  op->id);
-
+	/* opとtriggerのactionの前後関係(actions_after,actions_after)のリストをセットする */
     order_actions(op, trigger, pe_order_optional);
+	/* triggerとconfirmのactionの前後関係(actions_after,actions_after)のリストをセットする */
     order_actions(trigger, confirm, pe_order_optional);
     return trigger;
 }
@@ -1989,7 +2001,7 @@ pe_post_notify(resource_t * rsc, node_t * node, notify_data_t * n_data, pe_worki
                 pe_rsc_trace(rsc, "Skipping %s: cancel", mon->uuid);
                 continue;
             }
-
+			/* n_data->post_doneとmonのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(n_data->post_done, mon, pe_order_optional);
         }
     }
@@ -2050,8 +2062,9 @@ create_notification_boundaries(resource_t * rsc, const char *action, action_t * 
 
         add_hash_param(n_data->pre_done->meta, "notify_key_type", "confirmed-pre");
         add_hash_param(n_data->pre_done->meta, "notify_key_operation", start->task);
-
+		/* n_data->pre_doneとstartのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(n_data->pre_done, start, pe_order_optional);
+		/* n_data->preとn_data->pre_doneのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(n_data->pre, n_data->pre_done, pe_order_optional);
     }
 
@@ -2095,18 +2108,21 @@ create_notification_boundaries(resource_t * rsc, const char *action, action_t * 
 
         add_hash_param(n_data->post_done->meta, "notify_key_type", "confirmed-post");
         add_hash_param(n_data->post_done->meta, "notify_key_operation", end->task);
-
+		/* endとn_data->postのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(end, n_data->post, pe_order_implies_then);
+		/* n_data->postとn_data->post_doneのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(n_data->post, n_data->post_done, pe_order_implies_then);
     }
 
     if (start && end) {
+		/* n_data->pre_doneとn_data->postのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(n_data->pre_done, n_data->post, pe_order_optional);
     }
 
     if (safe_str_eq(action, RSC_STOP)) {
+		/* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
         action_t *all_stopped = get_pseudo_op(ALL_STOPPED, data_set);
-
+		/* n_data->pre_doneとall_stoppedのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(n_data->post_done, all_stopped, pe_order_optional);
     }
 

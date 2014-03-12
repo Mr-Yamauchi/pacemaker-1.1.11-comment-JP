@@ -423,16 +423,18 @@ custom_action(resource_t * rsc, char *key, const char *task,
         action->meta = g_hash_table_new_full(crm_str_hash, g_str_equal, free, free);
 
         if (save_action) {
-			/* data_setのアクション情報に生成したアクションを追加する */
+			/* 保存指定されている場合は、data_setのアクション情報に生成したアクションを追加する */
             data_set->actions = g_list_prepend(data_set->actions, action);
         }
 
         if (rsc != NULL) {
+			/* リソースが指定されている場合 */
             action->op_entry = find_rsc_op_entry_helper(rsc, key, TRUE);
 
             unpack_operation(action, action->op_entry, rsc->container, data_set);
 
             if (save_action) {
+				/* 保存指定されている場合は、リソースのアクション情報にも追加する */
                 rsc->actions = g_list_prepend(rsc->actions, action);
             }
         }
@@ -1571,7 +1573,7 @@ get_target_role(resource_t * rsc, enum rsc_role_e * role)
     *role = local_role;
     return TRUE;
 }
-
+/* actionの前後関係(actions_after,actions_after)のリストをセットする */
 gboolean
 order_actions(action_t * lh_action, action_t * rh_action, enum pe_ordering order)
 {
@@ -1590,19 +1592,21 @@ order_actions(action_t * lh_action, action_t * rh_action, enum pe_ordering order
     crm_trace("Ordering Action %s before %s", lh_action->uuid, rh_action->uuid);
 
     /* Filter dups, otherwise update_action_states() has too much work to do */
+    /* frist指定のアクションに設定されている後実行のアクションリストをすべて処理する */
     gIter = lh_action->actions_after;
     for (; gIter != NULL; gIter = gIter->next) {
         action_wrapper_t *after = (action_wrapper_t *) gIter->data;
 
         if (after->action == rh_action && (after->type & order)) {
+			/* thenアクションが、すでに設定済のなら前後関係を処理しない */
             return FALSE;
         }
     }
-
+	/* 後実行(thenアクション)の情報を作成する */
     wrapper = calloc(1, sizeof(action_wrapper_t));
     wrapper->action = rh_action;
     wrapper->type = order;
-
+	/* first指定のアクションの後実行のアクションのリストにthenアクションの情報を追加する */
     list = lh_action->actions_after;
     list = g_list_prepend(list, wrapper);
     lh_action->actions_after = list;
@@ -1611,34 +1615,37 @@ order_actions(action_t * lh_action, action_t * rh_action, enum pe_ordering order
 
 /* 	order |= pe_order_implies_then; */
 /* 	order ^= pe_order_implies_then; */
-
+	/* 前実行(firstアクション)の情報を作成する */
     wrapper = calloc(1, sizeof(action_wrapper_t));
     wrapper->action = lh_action;
     wrapper->type = order;
+	/* then指定のアクションの前実行のアクションのリストにfirstアクションの情報を追加する */
     list = rh_action->actions_before;
     list = g_list_prepend(list, wrapper);
     rh_action->actions_before = list;
     return TRUE;
 }
-
+/* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
 action_t *
 get_pseudo_op(const char *name, pe_working_set_t * data_set)
 {
     action_t *op = NULL;
     const char *op_s = name;
     GListPtr possible_matches = NULL;
-
+	/* 実行アクションリストから対象となるpsedoアクションを検索する */
     possible_matches = find_actions(data_set->actions, name, NULL);
     if (possible_matches != NULL) {
         if (g_list_length(possible_matches) > 1) {
             pe_warn("Action %s exists %d times", name, g_list_length(possible_matches));
         }
-
+		/* 存在した場合は、そのアクション情報を返す */
         op = g_list_nth_data(possible_matches, 0);
         g_list_free(possible_matches);
 
     } else {
+		/* 存在しないアクションならアクションを生成して実行するアクションリスト(data_set->actions)に保存 */
         op = custom_action(NULL, strdup(op_s), op_s, NULL, TRUE, TRUE, data_set);
+        /* フラグセット */
         set_bit(op->flags, pe_action_pseudo);
         set_bit(op->flags, pe_action_runnable);
     }

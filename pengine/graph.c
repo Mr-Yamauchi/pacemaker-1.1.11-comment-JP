@@ -409,7 +409,7 @@ update_action(action_t * then)
 
         if (first->rsc != then->rsc
             && first->rsc != NULL && then->rsc != NULL && first->rsc != then->rsc->parent) {
-			/* firstリソースとthenリソースが違うリソースで親子関係にない場合(groupリソースなどのorderでない場合) */
+			/* firstリソースとthenリソースが違うリソースで、親子関係のorderでない場合(group/clone/Masterリソースなどのorderでない場合) */
             first = rsc_expand_action(first);
         }
         if (first != other->action) {
@@ -439,6 +439,7 @@ update_action(action_t * then)
 
         } else if (order_actions(first, then, other->type)) {
             /* Start again to get the new actions_before list */
+			/* firstとthenのactionの前後関係(actions_after,actions_after)のリストをセットした場合 */
             changed |= (pe_graph_updated_then | pe_graph_disable);
         }
 
@@ -1044,7 +1045,7 @@ should_dump_input(int last_action, action_t * action, action_wrapper_t * wrapper
               is_set(wrapper->action->flags, pe_action_print_always), wrapper->type, action->uuid);
     return TRUE;
 }
-
+/* アクション情報からグラフをセットする */
 void
 graph_element_from_action(action_t * action, pe_working_set_t * data_set)
 {
@@ -1058,6 +1059,7 @@ graph_element_from_action(action_t * action, pe_working_set_t * data_set)
     xmlNode *xml_action = NULL;
 
     if (should_dump_action(action) == FALSE) {
+		/* 処理済のアクションに関しては処理しない */
         return;
     }
 
@@ -1079,12 +1081,12 @@ graph_element_from_action(action_t * action, pe_working_set_t * data_set)
     if (synapse_priority > 0) {
         crm_xml_add_int(syn, XML_CIB_ATTR_PRIORITY, synapse_priority);
     }
-
+	/* 対象アクションをxmlに変換しセットする */
     xml_action = action2xml(action, FALSE, data_set);
     add_node_nocopy(set, crm_element_name(xml_action), xml_action);
-
+	/* 対象アクションの前に実行するべきリスト(actions_before)をaction_idでソートする */
     action->actions_before = g_list_sort(action->actions_before, sort_action_id);
-
+	/* ソートされた対象アクションの前に実行するべきリストをすべて処理する */
     for (lpc = action->actions_before; lpc != NULL; lpc = lpc->next) {
         action_wrapper_t *wrapper = (action_wrapper_t *) lpc->data;
 
@@ -1097,7 +1099,7 @@ graph_element_from_action(action_t * action, pe_working_set_t * data_set)
             );
         last_action = wrapper->action->id;
         input = create_xml_node(in, "trigger");
-
+		/* 対象アクションの前に実行アクションをtriggerとしてxmlに変換してセットする */
         xml_action = action2xml(wrapper->action, TRUE, data_set);
         add_node_nocopy(input, crm_element_name(xml_action), xml_action);
     }

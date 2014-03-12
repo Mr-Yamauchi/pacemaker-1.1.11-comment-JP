@@ -1135,6 +1135,7 @@ order_rsc_sets(const char *id, xmlNode * set1, xmlNode * set2, enum pe_order_kin
 		/* 前に出現したresource_setの"require-all"値がFALSEか指定されていない場合(true以外) */
         char *task = crm_concat(CRM_OP_RELAXED_SET, ID(set1), ':');
         /* 前に出現したresource_setと次に出現したresource_setの間に挟むsedoアクションを生成する */
+		/* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
         action_t *unordered_action = get_pseudo_op(task, data_set);
 
         free(task);

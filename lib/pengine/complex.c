@@ -335,7 +335,7 @@ add_template_rsc(xmlNode * xml_obj, pe_working_set_t * data_set)
 
     return TRUE;
 }
-
+/* リソース情報の共通展開処理 */
 gboolean
 common_unpack(xmlNode * xml_obj, resource_t ** rsc,
               resource_t * parent, pe_working_set_t * data_set)
@@ -406,7 +406,7 @@ common_unpack(xmlNode * xml_obj, resource_t ** rsc,
     } else {
         (*rsc)->id = strdup(id);
     }
-
+	/* /* リソース種別毎の処理へのポインタをセットする */
     (*rsc)->fns = &resource_class_functions[(*rsc)->variant];
     pe_rsc_trace((*rsc), "Unpacking resource...");
 

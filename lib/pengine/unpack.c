@@ -1639,9 +1639,11 @@ process_orphan_resource(xmlNode * rsc_entry, node_t * node, pe_working_set_t * d
 
                 if (is_remote_node(node)) {
                     char *pseudo_op_name = crm_concat(CRM_OP_PROBED, node->details->id, '_');
+                    /* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
                     ready = get_pseudo_op(pseudo_op_name, data_set);
                     free(pseudo_op_name);
                 } else {
+					/* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
                     ready = get_pseudo_op(CRM_OP_PROBED, data_set);
                 }
 
@@ -1652,7 +1654,7 @@ process_orphan_resource(xmlNode * rsc_entry, node_t * node, pe_working_set_t * d
                 pe_rsc_info(rsc, "Clearing failcount (%d) for orphaned resource %s on %s (%s)",
                             get_failcount(node, rsc, NULL, data_set), rsc->id, node->details->uname,
                             clear_op->uuid);
-
+				/* CRM_OP_PROBEDとCRM_OP_CLEAR_FAILCOUNTのactionの前後関係(actions_after,actions_after)のリストをセットする */
                 order_actions(clear_op, ready, pe_order_optional);
             }
         }

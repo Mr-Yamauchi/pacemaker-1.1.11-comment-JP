@@ -630,7 +630,7 @@ clone_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
     pe_rsc_trace(rsc, "Done allocating %s", rsc->id);
     return NULL;
 }
-
+/* cloneリソースの実行アクションを生成する */
 static void
 clone_update_pseudo_status(resource_t * rsc, gboolean * stopping, gboolean * starting,
                            gboolean * active)
@@ -773,6 +773,7 @@ child_ordering_constraints(resource_t * rsc, pe_working_set_t * data_set)
         if (stop) {
             if (last_stop) {
                 /* child/child relative stop */
+				/* stopとlast_stopのactionの前後関係(actions_after,actions_after)のリストをセットする */
                 order_actions(stop, last_stop, pe_order_optional);
             }
             last_stop = stop;
@@ -781,6 +782,7 @@ child_ordering_constraints(resource_t * rsc, pe_working_set_t * data_set)
         if (start) {
             if (last_start) {
                 /* child/child relative start */
+				/* last_startとstartのactionの前後関係(actions_after,actions_after)のリストをセットする */
                 order_actions(last_start, start, pe_order_optional);
             }
             last_start = start;
@@ -847,6 +849,7 @@ clone_create_actions(resource_t * rsc, pe_working_set_t * data_set)
             create_notification_boundaries(rsc, RSC_STOP, stop, stopped, data_set);
 
         if (clone_data->stop_notify && clone_data->start_notify) {
+			/* clone_data->stop_notify->post_doneとclone_data->start_notify->preのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(clone_data->stop_notify->post_done, clone_data->start_notify->pre,
                           pe_order_optional);
         }
@@ -1259,6 +1262,7 @@ clone_update_actions_interleave(action_t * first, action_t * then, node_t * node
             if (first_action == NULL || then_action == NULL) {
                 continue;
             }
+			/* first_actionとthen_actionのactionの前後関係(actions_after,actions_after)のリストをセットする */
             if (order_actions(first_action, then_action, type)) {
                 crm_debug("Created constraint for %s -> %s", first_action->uuid, then_action->uuid);
                 changed |= (pe_graph_updated_first | pe_graph_updated_then);
@@ -1272,7 +1276,7 @@ clone_update_actions_interleave(action_t * first, action_t * then, node_t * node
     }
     return changed;
 }
-
+/* cloneリソースのアクション更新 */
 enum pe_graph_flags
 clone_update_actions(action_t * first, action_t * then, node_t * node, enum pe_action_flags flags,
                      enum pe_action_flags filter, enum pe_ordering type)
@@ -1284,6 +1288,7 @@ clone_update_actions(action_t * first, action_t * then, node_t * node, enum pe_a
     if (first->rsc != then->rsc
         && first->rsc && first->rsc->variant >= pe_clone
         && then->rsc && then->rsc->variant >= pe_clone) {
+		/* firstリソースとthenリソースが異なるリソースで、cloneリソース間の場合 */
         clone_variant_data_t *clone_data = NULL;
 
         if (strstr(then->uuid, "_stop_0") || strstr(then->uuid, "_demote_0")) {
@@ -1293,6 +1298,7 @@ clone_update_actions(action_t * first, action_t * then, node_t * node, enum pe_a
             get_clone_variant_data(clone_data, then->rsc);
             rsc = then->rsc->id;
         }
+        /* cloneリソースののinterleave値を取り出す */
         interleave = clone_data->interleave;
     }
 
@@ -1300,13 +1306,16 @@ clone_update_actions(action_t * first, action_t * then, node_t * node, enum pe_a
               first->uuid, then->uuid, interleave ? "yes" : "no", rsc);
 
     if (interleave) {
+		/* interleaveがTRUEの場合 */
         changed = clone_update_actions_interleave(first, then, node, flags, filter, type);
 
     } else if (then->rsc) {
+		/* interleaveがFALSEで、thenリソースが指定されている場合 */
+		/* cloneとgroup/primive間の関係も対象となる */		
         GListPtr gIter = then->rsc->children;
 
         changed |= native_update_actions(first, then, node, flags, filter, type);
-
+		/* thenリソースのすべての子リソースを処理する */
         for (; gIter != NULL; gIter = gIter->next) {
             resource_t *child = (resource_t *) gIter->data;
             action_t *child_action = find_first_action(child->actions, NULL, then->task, node);
@@ -1340,7 +1349,7 @@ clone_rsc_location(resource_t * rsc, rsc_to_node_t * constraint)
         child_rsc->cmds->rsc_location(child_rsc, constraint);
     }
 }
-
+/* clone/masterリソースの実行するべきアクション情報をgraphにセットする */
 void
 clone_expand(resource_t * rsc, pe_working_set_t * data_set)
 {

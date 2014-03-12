@@ -87,7 +87,7 @@ group_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
 }
 
 void group_update_pseudo_status(resource_t * parent, resource_t * child);
-
+/* groupリソースの実行アクションを生成する */
 void
 group_create_actions(resource_t * rsc, pe_working_set_t * data_set)
 {
@@ -96,10 +96,10 @@ group_create_actions(resource_t * rsc, pe_working_set_t * data_set)
     GListPtr gIter = rsc->children;
 
     pe_rsc_trace(rsc, "Creating actions for %s", rsc->id);
-
+	/* すべての子リソースの実行アクションを生成する */
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *child_rsc = (resource_t *) gIter->data;
-
+		/* １つの子リソースの実行アクションを生成する */
         child_rsc->cmds->create_actions(child_rsc, data_set);
         group_update_pseudo_status(rsc, child_rsc);
     }
@@ -461,7 +461,7 @@ group_rsc_location(resource_t * rsc, rsc_to_node_t * constraint)
     constraint->node_list_rh = saved;
     g_list_free_full(zero, free);
 }
-
+/* groupリソースの実行するべきアクション情報をgraphにセットする */
 void
 group_expand(resource_t * rsc, pe_working_set_t * data_set)
 {
@@ -470,8 +470,9 @@ group_expand(resource_t * rsc, pe_working_set_t * data_set)
     pe_rsc_trace(rsc, "Processing actions from %s", rsc->id);
 
     CRM_CHECK(rsc != NULL, return);
+    /* groupリソース自身のアクション情報をgraphにセットする */
     native_expand(rsc, data_set);
-
+	/* groupリソースのすべての子リソースのアクション情報をgraphにセットする */
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *child_rsc = (resource_t *) gIter->data;
 

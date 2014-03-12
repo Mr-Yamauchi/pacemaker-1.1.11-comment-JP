@@ -1067,7 +1067,7 @@ Recurring_Stopped(resource_t * rsc, action_t * start, node_t * node, pe_working_
         }
     }
 }
-
+/* nativeリソースの実行アクションを生成する */
 void
 native_create_actions(resource_t * rsc, pe_working_set_t * data_set)
 {
@@ -1273,6 +1273,7 @@ native_internal_constraints(resource_t * rsc, pe_working_set_t * data_set)
     }
 
     {
+		/* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
         action_t *all_stopped = get_pseudo_op(ALL_STOPPED, data_set);
 
         custom_action_order(rsc, stop_key(rsc), NULL,
@@ -1293,6 +1294,7 @@ native_internal_constraints(resource_t * rsc, pe_working_set_t * data_set)
             node_t *current = (node_t *) gIter->data;
 
             char *load_stopped_task = crm_concat(LOAD_STOPPED, current->details->uname, '_');
+            /* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
             action_t *load_stopped = get_pseudo_op(load_stopped_task, data_set);
 
             if (load_stopped->node == NULL) {
@@ -1307,6 +1309,7 @@ native_internal_constraints(resource_t * rsc, pe_working_set_t * data_set)
         g_hash_table_iter_init(&iter, rsc->allowed_nodes);
         while (g_hash_table_iter_next(&iter, NULL, (void **)&next)) {
             char *load_stopped_task = crm_concat(LOAD_STOPPED, next->details->uname, '_');
+            /* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
             action_t *load_stopped = get_pseudo_op(load_stopped_task, data_set);
 
             if (load_stopped->node == NULL) {
@@ -1699,7 +1702,7 @@ native_action_flags(action_t * action, node_t * node)
 {
     return action->flags;
 }
-
+/* nativeリソースのアクション更新 */
 enum pe_graph_flags
 native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_action_flags flags,
                       enum pe_action_flags filter, enum pe_ordering type)
@@ -1870,21 +1873,21 @@ native_rsc_location(resource_t * rsc, rsc_to_node_t * constraint)
         pe_rsc_trace(rsc, "%s + %s : %d", rsc->id, node->details->uname, node->weight);
     }
 }
-
+/* nativeリソースの実行するべきアクション情報をgraphにセットする */
 void
 native_expand(resource_t * rsc, pe_working_set_t * data_set)
 {
     GListPtr gIter = NULL;
 
     pe_rsc_trace(rsc, "Processing actions from %s", rsc->id);
-
+	/* 対象リソースのアクション情報をgraphにセットする */
     for (gIter = rsc->actions; gIter != NULL; gIter = gIter->next) {
         action_t *action = (action_t *) gIter->data;
 
         crm_trace("processing action %d for rsc=%s", action->id, rsc->id);
         graph_element_from_action(action, data_set);
     }
-
+	/* 子リソースがある場合には、すべての子リソースのアクション情報をgraphにセットする */
     for (gIter = rsc->children; gIter != NULL; gIter = gIter->next) {
         resource_t *child_rsc = (resource_t *) gIter->data;
 
@@ -2510,6 +2513,7 @@ native_create_probe(resource_t * rsc, node_t * node, action_t * complete,
         action_t *unfence = pe_fence_op(node, "on", data_set);
 
         crm_notice("Unfencing %s for %s", node->details->uname, rsc->id);
+		/* unfenceとprobeのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(unfence, probe, pe_order_implies_then);
 
         /* The lack of ordering constraints on STONITH_UP would
@@ -2534,6 +2538,7 @@ native_create_probe(resource_t * rsc, node_t * node, action_t * complete,
     }
 
     pe_rsc_debug(rsc, "Probing %s on %s (%s)", rsc->id, node->details->uname, role2text(rsc->role));
+	/* probeとcompleteのactionの前後関係(actions_after,actions_after)のリストをセットする */
     order_actions(probe, complete, pe_order_implies_then);
 
     return TRUE;
@@ -2546,13 +2551,16 @@ native_start_constraints(resource_t * rsc, action_t * stonith_op, gboolean is_st
     node_t *target = stonith_op ? stonith_op->node : NULL;
 
     GListPtr gIter = NULL;
+	/* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
     action_t *all_stopped = get_pseudo_op(ALL_STOPPED, data_set);
+	/* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
     action_t *stonith_done = get_pseudo_op(STONITH_DONE, data_set);
 
     for (gIter = rsc->actions; gIter != NULL; gIter = gIter->next) {
         action_t *action = (action_t *) gIter->data;
 
         if (action->needs == rsc_req_stonith) {
+			/* stonith_doneとactionのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(stonith_done, action, pe_order_optional);
 
         } else if (target != NULL && safe_str_eq(action->task, RSC_START)
@@ -2575,6 +2583,7 @@ native_start_constraints(resource_t * rsc, action_t * stonith_op, gboolean is_st
 
             pe_rsc_debug(rsc, "Ordering %s after %s recovery", action->uuid,
                          target->details->uname);
+			/* all_stoppedとactionのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(all_stopped, action, pe_order_optional | pe_order_runnable_left);
         }
     }
@@ -2622,8 +2631,9 @@ native_stop_constraints(resource_t * rsc, action_t * stonith_op, gboolean is_sto
 
         {
             action_t *parent_stop = find_first_action(top->actions, NULL, RSC_STOP, NULL);
-
+			/* stonith_opとactionのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(stonith_op, action, pe_order_optional);
+			/* stonith_opとparent_stopのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(stonith_op, parent_stop, pe_order_optional);
         }
 
@@ -2717,6 +2727,7 @@ native_stop_constraints(resource_t * rsc, action_t * stonith_op, gboolean is_sto
             update_action_flags(action, pe_action_pseudo);
             update_action_flags(action, pe_action_runnable);
             if (is_stonith == FALSE) {
+				/* stonith_opとactionのactionの前後関係(actions_after,actions_after)のリストをセットする */
                 order_actions(stonith_op, action, pe_order_optional);
             }
         }
@@ -3083,7 +3094,7 @@ MigrateRsc(resource_t * rsc, action_t * stop, action_t * start, pe_working_set_t
         for (gIter = rsc->dangling_migrations; gIter != NULL; gIter = gIter->next) {
             node_t *current = (node_t *) gIter->data;
             action_t *stop = stop_action(rsc, current, FALSE);
-
+			/* stopとtoのactionの前後関係(actions_after,actions_after)のリストをセットする */
             order_actions(stop, to, pe_order_optional);
             pe_rsc_trace(rsc, "Ordering migration after cleanup of %s on %s", rsc->id,
                          current->details->uname);
@@ -3110,7 +3121,9 @@ MigrateRsc(resource_t * rsc, action_t * stop, action_t * start, pe_working_set_t
     }
 
     then = to ? to : from;
+	/* fromとstopのactionの前後関係(actions_after,actions_after)のリストをセットする */
     order_actions(from, stop, pe_order_optional);
+	/* doneとthenのactionの前後関係(actions_after,actions_after)のリストをセットする */
     order_actions(done, then, pe_order_optional);
     add_hash_param(from->meta, XML_LRM_ATTR_MIGRATE_SOURCE, stop->node->details->uname);
     add_hash_param(from->meta, XML_LRM_ATTR_MIGRATE_TARGET, start->node->details->uname);
@@ -3201,6 +3214,7 @@ MigrateRsc(resource_t * rsc, action_t * stop, action_t * start, pe_working_set_t
         }
 
         crm_debug("Ordering %s before %s (stop)", other_w->action->uuid, then->uuid);
+		/* otherとthenのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(other, then, other_w->type);
     }
 
@@ -3216,6 +3230,7 @@ MigrateRsc(resource_t * rsc, action_t * stop, action_t * start, pe_working_set_t
             continue;
         }
         crm_debug("Ordering %s before %s (start)", other_w->action->uuid, then->uuid);
+		/* otherとthenのactionの前後関係(actions_after,actions_after)のリストをセットする */
         order_actions(other, then, other_w->type);
     }
 }
