@@ -1318,12 +1318,15 @@ clone_update_actions(action_t * first, action_t * then, node_t * node, enum pe_a
 		/* thenリソースのすべての子リソースを処理する */
         for (; gIter != NULL; gIter = gIter->next) {
             resource_t *child = (resource_t *) gIter->data;
+            /* 子リソースのthenアクションを検索する */
             action_t *child_action = find_first_action(child->actions, NULL, then->task, node);
 
             if (child_action) {
+				/* thenアクションが存在した場合、子リソースのactionフラグを取得 */
                 enum pe_action_flags child_flags = child->cmds->action_flags(child_action, node);
 
                 if (is_set(child_flags, pe_action_runnable)) {
+					/* アクションが実行可能(pe_action_runnable)な場合は、アクションの更新を確認 */
                     changed |=
                         child->cmds->update_actions(first, child_action, node, flags, filter, type);
                 }
