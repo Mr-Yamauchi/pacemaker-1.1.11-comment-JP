@@ -1968,9 +1968,9 @@ unpack_lrm_rsc_state(node_t * node, xmlNode * rsc_entry, pe_working_set_t * data
     CRM_ASSERT(rsc != NULL);
 
     /* process operations */
-    saved_role = rsc->role;
+    saved_role = rsc->role;				/* 一旦、リソースの現在のロールを保存 */
     on_fail = action_fail_ignore;
-    rsc->role = RSC_ROLE_UNKNOWN;
+    rsc->role = RSC_ROLE_UNKNOWN;		/* リソースの現現在のロールをRSC_ROLE_UNKNOWNにセット */
     sorted_op_list = g_list_sort(op_list, sort_op_by_callid);
 
     for (gIter = sorted_op_list; gIter != NULL; gIter = gIter->next) {

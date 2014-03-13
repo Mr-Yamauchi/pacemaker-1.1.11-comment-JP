@@ -1542,34 +1542,42 @@ gboolean
 get_target_role(resource_t * rsc, enum rsc_role_e * role)
 {
     enum rsc_role_e local_role = RSC_ROLE_UNKNOWN;
+    /* リソースのmetaハッシュテーブルからXML_RSC_ATTR_TARGET_ROLEを取り出す */
     const char *value = g_hash_table_lookup(rsc->meta, XML_RSC_ATTR_TARGET_ROLE);
 
     CRM_CHECK(role != NULL, return FALSE);
 
     if (value == NULL || safe_str_eq("started", value)
         || safe_str_eq("default", value)) {
+		/* XML_RSC_ATTR_TARGET_ROLEが取り出せないか、"started"か"default"の場合は、何もしない */
         return FALSE;
     }
-
+	/* 取り出したXML_RSC_ATTR_TARGET_ROLEで設定変数をセット */
     local_role = text2role(value);
     if (local_role == RSC_ROLE_UNKNOWN) {
+		/* 取り出したXML_RSC_ATTR_TARGET_ROLEがUNKNOWNの場合は何もしない */
         crm_config_err("%s: Unknown value for %s: %s", rsc->id, XML_RSC_ATTR_TARGET_ROLE, value);
         return FALSE;
 
     } else if (local_role > RSC_ROLE_STARTED) {
+		/* 取り出したXML_RSC_ATTR_TARGET_ROLEがRSC_ROLE_SLAVE、RSC_ROLE_MASTERの場合 */
         if (uber_parent(rsc)->variant == pe_master) {
+			/* リソースの親リソースがmaster/slvaeリソースで、取り出したXML_RSC_ATTR_TARGET_ROLEがの場合 */
+			/* も何もしない */
             if (local_role > RSC_ROLE_SLAVE) {
                 /* This is what we'd do anyway, just leave the default to avoid messing up the placement algorithm */
                 return FALSE;
             }
 
         } else {
+			/* リソースの親リソースがmaster/slvaeリソースでない場合は、RSC_ROLE_SLAVE、RSC_ROLE_MASTERの指定は */
+			/* 意味がないので、エラーログを出して何もしない */
             crm_config_err("%s is not part of a master/slave resource, a %s of '%s' makes no sense",
                            rsc->id, XML_RSC_ATTR_TARGET_ROLE, value);
             return FALSE;
         }
     }
-
+	/* 取り出したXML_RSC_ATTR_TARGET_ROLEを返却する */
     *role = local_role;
     return TRUE;
 }

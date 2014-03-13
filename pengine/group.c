@@ -103,7 +103,7 @@ group_create_actions(resource_t * rsc, pe_working_set_t * data_set)
         child_rsc->cmds->create_actions(child_rsc, data_set);
         group_update_pseudo_status(rsc, child_rsc);
     }
-
+	/* groupリソース自体のpsedoアクションをpe_action_runnable（実行可能)として生成する */
     op = start_action(rsc, NULL, TRUE /* !group_data->child_starting */ );
     set_bit(op->flags, pe_action_pseudo | pe_action_runnable);
 
@@ -120,6 +120,7 @@ group_create_actions(resource_t * rsc, pe_working_set_t * data_set)
 
     value = g_hash_table_lookup(rsc->meta, "stateful");
     if (crm_is_true(value)) {
+		/* リソースのmetaに"stateful"が設定されている場合のみ、DEMOTE,DEMOTED,PROMOTE,PROMOTEDのアクションを生成 */
         op = custom_action(rsc, demote_key(rsc), RSC_DEMOTE, NULL, TRUE, TRUE, data_set);
         set_bit(op->flags, pe_action_pseudo);
         set_bit(op->flags, pe_action_runnable);

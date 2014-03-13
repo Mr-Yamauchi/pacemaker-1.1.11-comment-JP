@@ -434,6 +434,7 @@ update_action(action_t * then)
                   uname : "", other->type);
 
         if (first == other->action) {
+			/* firstリソースのアクション情報とthenリソースアクション情報が同じ場合 */
             clear_bit(first_flags, pe_action_pseudo);
             changed |= graph_update_action(first, then, then->node, first_flags, other->type);
 

@@ -423,8 +423,8 @@ common_unpack(xmlNode * xml_obj, resource_t ** rsc,
     (*rsc)->rsc_cons = NULL;
     (*rsc)->rsc_tickets = NULL;
     (*rsc)->actions = NULL;
-    (*rsc)->role = RSC_ROLE_STOPPED;
-    (*rsc)->next_role = RSC_ROLE_UNKNOWN;
+    (*rsc)->role = RSC_ROLE_STOPPED;				/* 現在のロールをRSC_ROLE_STOPPEDで初期化 */
+    (*rsc)->next_role = RSC_ROLE_UNKNOWN;			/* 次のロールをRSC_ROLE_UNKNOWNで初期化 */
 
     (*rsc)->recovery_type = recovery_stop_start;
     (*rsc)->stickiness = data_set->default_resource_stickiness;
@@ -585,7 +585,7 @@ common_unpack(xmlNode * xml_obj, resource_t ** rsc,
         /* call crm_get_msec() and convert back to seconds */
         (*rsc)->failure_timeout = (crm_get_msec(value) / 1000);
     }
-
+	/* リソースのmetaハッシュテーブルに有効なrole(XML_RSC_ATTR_TARGET_ROLE)場合は次のロールにセットする */
     get_target_role(*rsc, &((*rsc)->next_role));
     pe_rsc_trace((*rsc), "\tDesired next state: %s",
                  (*rsc)->next_role != RSC_ROLE_UNKNOWN ? role2text((*rsc)->next_role) : "default");

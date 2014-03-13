@@ -1721,9 +1721,11 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
         } else if ((then_rsc_role == RSC_ROLE_STOPPED) && safe_str_eq(then->task, RSC_STOP)) {
             /* ignore... if 'then' is supposed to be stopped after 'first', but
              * then is already stopped, there is nothing to be done when non-symmetrical.  */
+             /* 停止済で、停止のアクションは処理しない */
         } else if ((then_rsc_role == RSC_ROLE_STARTED) && safe_str_eq(then->task, RSC_START)) {
             /* ignore... if 'then' is supposed to be started after 'first', but
              * then is already started, there is nothing to be done when non-symmetrical.  */
+             /* 開始済で、開始のアクションは処理しない */
         } else if (!(first->flags & pe_action_runnable)) {
             /* prevent 'then' action from happening if 'first' is not runnable and
              * 'then' has not yet occurred. */
@@ -1738,6 +1740,7 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
     if (type & pe_order_implies_first) {
         if ((filter & pe_action_optional) && (flags & pe_action_optional) == 0) {
             pe_rsc_trace(first->rsc, "Unset optional on %s because of %s", first->uuid, then->uuid);
+            /* firstリソースのアクションのoptionalフラグをクリアして実行できるようにする */
             pe_clear_action_bit(first, pe_action_optional);
         }
     }
@@ -1746,6 +1749,7 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
         if ((filter & pe_action_optional) &&
             ((then->flags & pe_action_optional) == FALSE) &&
             then->rsc && (then->rsc->role == RSC_ROLE_MASTER)) {
+            /* firstリソースのアクションのoptional実行フラグをクリアして実行できるようにする */
             clear_bit(first->flags, pe_action_optional);
         }
     }
@@ -1755,6 +1759,7 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
         && is_set(then->flags, pe_action_runnable)
         && is_set(flags, pe_action_runnable) == FALSE) {
         pe_rsc_trace(then->rsc, "Unset runnable on %s because of %s", then->uuid, first->uuid);
+        /* thenリソースのアクションのrunnableフラグをクリアして実行できないようにする */
         pe_clear_action_bit(then, pe_action_runnable);
     }
 
@@ -1763,6 +1768,7 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
         && is_set(then->flags, pe_action_optional)
         && is_set(flags, pe_action_optional) == FALSE) {
         pe_rsc_trace(then->rsc, "Unset optional on %s because of %s", then->uuid, first->uuid);
+        /* firstリソースのアクションのoptionalフラグをクリアして実行できるようにする */
         pe_clear_action_bit(then, pe_action_optional);
     }
 
@@ -1796,6 +1802,7 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
     }
 
     if (then_flags != then->flags) {
+		/* thenリソースのアクションの状態が変わった */
         changed |= pe_graph_updated_then;
         pe_rsc_trace(then->rsc,
                      "Then: Flags for %s on %s are now  0x%.6x (was 0x%.6x) because of %s 0x%.6x",
@@ -1804,6 +1811,7 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
     }
 
     if (first_flags != first->flags) {
+		/* firstリソースのアクションの状態が変わった */
         changed |= pe_graph_updated_first;
         pe_rsc_trace(first->rsc,
                      "First: Flags for %s on %s are now  0x%.6x (was 0x%.6x) because of %s 0x%.6x",
