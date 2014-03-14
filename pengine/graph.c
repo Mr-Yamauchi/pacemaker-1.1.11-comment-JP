@@ -65,7 +65,7 @@ get_action_flags(action_t * action, node_t * node)
     }
     return flags;
 }
-
+/* */
 static char *
 convert_non_atomic_uuid(char *old_uuid, resource_t * rsc, gboolean allow_notify,
                         gboolean free_original)
@@ -86,7 +86,7 @@ convert_non_atomic_uuid(char *old_uuid, resource_t * rsc, gboolean allow_notify,
     } else if (rsc->variant < pe_group) {
         goto done;              /* no conversion */
     }
-
+	/* uuidからid,task,intervalを取り出す */
     CRM_ASSERT(parse_op_key(old_uuid, &rid, &raw_task, &interval));
     if (interval > 0) {
         goto done;              /* no conversion */
@@ -141,18 +141,20 @@ convert_non_atomic_uuid(char *old_uuid, resource_t * rsc, gboolean allow_notify,
     free(rid);
     return uuid;
 }
-
+/* アクション情報を決定する */
 static action_t *
 rsc_expand_action(action_t * action)
 {
     action_t *result = action;
 
     if (action->rsc && action->rsc->variant >= pe_group) {
+		/* アクションの対象リソースがgroup,clone,masterの場合 */
         /* Expand 'start' -> 'started' */
         char *uuid = NULL;
         gboolean notify = FALSE;
 
         if (action->rsc->parent == NULL) {
+			/* アクションの対象リソースの親リソースがない場合は、アクションの対象リソースのpe_rsc_notifydeでnotifyをセット */
             /* Only outter-most resources have notification actions */
             notify = is_set(action->rsc->flags, pe_rsc_notify);
         }
@@ -390,7 +392,7 @@ update_action(action_t * then)
         enum pe_action_flags first_flags = 0;
 
         if (first->rsc && first->rsc->variant == pe_group && safe_str_eq(first->task, RSC_START)) {
-            /* traceログ出力のみ：firstリソースが指定されてて、groupリソースでfirstがSTART指定の場合 */
+            /* traceログ出力のみ：前に実行するアクション情報(firstリソース)が指定されてて、groupリソースでfirstがSTART指定の場合 */
             first_node = first->rsc->fns->location(first->rsc, NULL, FALSE);
             if (first_node) {
                 crm_trace("First: Found node %s for %s", first_node->details->uname, first->uuid);
@@ -409,10 +411,12 @@ update_action(action_t * then)
 
         if (first->rsc != then->rsc
             && first->rsc != NULL && then->rsc != NULL && first->rsc != then->rsc->parent) {
-			/* firstリソースとthenリソースが違うリソースで、親子関係のorderでない場合(group/clone/Masterリソースなどのorderでない場合) */
+			/* 前に実行するアクション情報(firstリソース)と対象アクション情報(thenリソース)が違うリソースで、親子関係のorderでない場合(group/clone/Masterリソースなどの内部orderでない場合) */
+            /* 対象とする前に実行するアクション情報(firstリソース)を決定する */
             first = rsc_expand_action(first);
         }
         if (first != other->action) {
+			/* 対象とする前に実行するアクション情報が変わった場合のログ出力 */
             crm_trace("Ordering %s afer %s instead of %s", then->uuid, first->uuid,
                       other->action->uuid);
         }
@@ -434,12 +438,16 @@ update_action(action_t * then)
                   uname : "", other->type);
 
         if (first == other->action) {
+            /* 対象とする前に実行するアクション情報が同じ場合 */
+            /* cloneリソースなどpromote,demoteなどのアクションとのorderの場合は、同じにならない場合有 */
+            /* clone: promote -> primitive:startなど */
             clear_bit(first_flags, pe_action_pseudo);
             changed |= graph_update_action(first, then, then->node, first_flags, other->type);
 
         } else if (order_actions(first, then, other->type)) {
             /* Start again to get the new actions_before list */
-			/* firstとthenのactionの前後関係(actions_after,actions_after)のリストをセットした場合 */
+			/* 前に実行するアクション情報(firstリソース)と対象アクション情報(thenリソース)の */
+			/* actionの前後関係(actions_after,actions_after)のリストを追加して、再処理の為のフラグをセットする */
             changed |= (pe_graph_updated_then | pe_graph_disable);
         }
 
@@ -451,7 +459,7 @@ update_action(action_t * then)
 
         if (changed & pe_graph_updated_first) {
             GListPtr lpc2 = NULL;
-
+			/* 前に実行するアクション情報(firstリソース)に変化があった場合 */
             crm_trace("Updated %s (first %s %s %s), processing dependants ",
                       first->uuid,
                       is_set(first->flags, pe_action_optional) ? "optional" : "required",
@@ -460,10 +468,12 @@ update_action(action_t * then)
                              pe_action_pseudo) ? "pseudo" : first->node ? first->node->details->
                       uname : "");
             for (lpc2 = first->actions_after; lpc2 != NULL; lpc2 = lpc2->next) {
+				/* 対象とする前に実行するアクション情報(firstリソース)の後に実行するアクション情報についても、update_actionを再実行する */
                 action_wrapper_t *other = (action_wrapper_t *) lpc2->data;
 
                 update_action(other->action);
             }
+			/* 対象とする前に実行するアクション情報(firstリソース)のupdate_actionを再実行する */
             update_action(first);
         }
     }
@@ -477,6 +487,7 @@ update_action(action_t * then)
     }
 
     if (changed & pe_graph_updated_then) {
+		/* 対象アクション情報(thenリソース)に変化があった場合 */
         crm_trace("Updated %s (then %s %s %s), processing dependants ",
                   then->uuid,
                   is_set(then->flags, pe_action_optional) ? "optional" : "required",
@@ -484,9 +495,10 @@ update_action(action_t * then)
                   is_set(then->flags,
                          pe_action_pseudo) ? "pseudo" : then->node ? then->node->details->
                   uname : "");
-
+		/* 対象アクション情報(thenリソース)のupdate_actionを再実行する */
         update_action(then);
         for (lpc = then->actions_after; lpc != NULL; lpc = lpc->next) {
+			/* 対象アクション情報(thenリソース)の後に実行するアクション情報についても、update_actionを再実行する */
             action_wrapper_t *other = (action_wrapper_t *) lpc->data;
 
             update_action(other->action);
