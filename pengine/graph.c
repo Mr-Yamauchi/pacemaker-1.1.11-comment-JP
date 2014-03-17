@@ -184,8 +184,14 @@ graph_update_action(action_t * first, action_t * then, node_t * node, enum pe_ac
     /* TODO: Do as many of these in parallel as possible */
 
     if (type & pe_order_implies_then) {
+		/* 前に実行するアクションのorderのフラグがpe_order_implies_thenの場合 */
+		/* pe_order_implies_thenが設定されているのは */
+		/* 		thenリソースのrestart_type == pe_restart_restartの場合か、*/
+		/* 		kind指定無のSCORE=INFINITYでsymmetrical=trueでfirst_actionがStart,Promoteの場合 */
         processed = TRUE;
         if (then->rsc) {
+			/* thenリソースが指定されている場合は、thenリソースのupdate_actionを実行する */
+			/* 		thenリソースのアクションがoptionalでoptional実行解除可能であれば解除して実行可能にする */
             changed |=
                 then->rsc->cmds->update_actions(first, then, node, flags & pe_action_optional,
                                                 pe_action_optional, pe_order_implies_then);
@@ -216,8 +222,16 @@ graph_update_action(action_t * first, action_t * then, node_t * node, enum pe_ac
     }
 
     if (type & pe_order_implies_first) {
+		/* 前に実行するアクションのorderのフラグがpe_order_implies_firstの場合 */
+		/*	pe_order_implies_firstが指定されているのは */
+		/*		kind無のscore=INFINITY,symmetrical=true,firt-action="Start" or "Promote" は
+    	/*		pe_order_kind_mandatoryがkindに設定で処理される */
+   		/* 		この時、cons_weightは、pe_order_optional | pe_order_implies_firstとなる */
+
         processed = TRUE;
         if (first->rsc) {
+			/* firstリソースが指定されている場合は、firstリソースのupdate_actionを実行する */
+			/* 		firstリソースのアクションがoptionalでoptional実行解除可能であれば解除して実行可能にする */
             changed |=
                 first->rsc->cmds->update_actions(first, then, node, flags,
                                                  pe_action_optional, pe_order_implies_first);
@@ -442,6 +456,8 @@ update_action(action_t * then)
             /* cloneリソースなどpromote,demoteなどのアクションとのorderの場合は、同じにならない場合有 */
             /* clone: promote -> primitive:startなど */
             clear_bit(first_flags, pe_action_pseudo);
+            /* 前に実行するアクション情報と対象とするアクション情報に変更を行う */
+            /* 変更がなければ、False、あればTRUE */
             changed |= graph_update_action(first, then, then->node, first_flags, other->type);
 
         } else if (order_actions(first, then, other->type)) {

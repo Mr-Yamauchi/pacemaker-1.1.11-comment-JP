@@ -141,21 +141,21 @@ get_ordering_type(xmlNode * xml_obj)
     if (kind == NULL) {
 		/* kindが未設定の場合は、scoreを取り出す */
         const char *score = crm_element_value(xml_obj, XML_RULE_ATTR_SCORE);
-
-        kind_e = pe_order_kind_mandatory;
+		
+        kind_e = pe_order_kind_mandatory;	/* kindをpe_order_kind_mandatoryにセット */
 
         if (score) {
             int score_i = char2score(score);
 
             if (score_i == 0) {
-				/* scoreが0の場合は、optionalに設定する */
+				/* scoreが0の場合は、pe_order_kind_optionalに設定する */
                 kind_e = pe_order_kind_optional;
             }
 
             /* } else if(rsc_then->variant == pe_native && rsc_first->variant > pe_group) { */
             /*     kind_e = pe_order_kind_optional; */
         }
-
+		/* 良く設定するkind指定なし、score=INFINITYの場合は、pe_order_kind_mandatoryとなる */
     } else if (safe_str_eq(kind, "Mandatory")) {
         kind_e = pe_order_kind_mandatory;
 
@@ -170,7 +170,7 @@ get_ordering_type(xmlNode * xml_obj)
 
         crm_config_err("Constraint %s: Unknown type '%s'", id, kind);
     }
-    return kind_e;
+    return kind_e;			/* kind_eを返す */
 }
 
 static resource_t *
@@ -227,37 +227,40 @@ unpack_simple_rsc_order(xmlNode * xml_obj, pe_working_set_t * data_set)
         crm_config_err("%s constraint must have an id", crm_element_name(xml_obj));
         return FALSE;
     }
-
+	/* first,then指定を取りだす */
     id_then = crm_element_value(xml_obj, XML_ORDER_ATTR_THEN);
     id_first = crm_element_value(xml_obj, XML_ORDER_ATTR_FIRST);
-
+	/* first-action,then-action指定を取りだす */
     action_then = crm_element_value(xml_obj, XML_ORDER_ATTR_THEN_ACTION);
     action_first = crm_element_value(xml_obj, XML_ORDER_ATTR_FIRST_ACTION);
-
+	/* first-instance,then-instance指定を取りだす */
     instance_then = crm_element_value(xml_obj, XML_ORDER_ATTR_THEN_INSTANCE);
     instance_first = crm_element_value(xml_obj, XML_ORDER_ATTR_FIRST_INSTANCE);
 
     if (action_first == NULL) {
-        action_first = RSC_START;
+        action_first = RSC_START;	/* frist-actionが指定なしならSTARTに設定 */
     }
     if (action_then == NULL) {
-        action_then = action_first;
+        action_then = action_first;	/* frist-actionが指定なしならfirt-actionと同じに設定T */
     }
 
     if (id_then == NULL || id_first == NULL) {
+		/* firt,then指定がなければエラー */
         crm_config_err("Constraint %s needs two sides lh: %s rh: %s",
                        id, crm_str(id_then), crm_str(id_first));
         return FALSE;
     }
-
+	/* first,then指定のリソースを検索する */
     rsc_then = pe_find_constraint_resource(data_set->resources, id_then);
     rsc_first = pe_find_constraint_resource(data_set->resources, id_first);
 
     if (rsc_then == NULL) {
+		/* then指定のリソースが存在しなければエラー */
         crm_config_err("Constraint %s: no resource found for name '%s'", id, id_then);
         return FALSE;
 
     } else if (rsc_first == NULL) {
+		/* first指定のリソースが存在しなければエラー */
         crm_config_err("Constraint %s: no resource found for name '%s'", id, id_first);
         return FALSE;
 
@@ -292,19 +295,26 @@ unpack_simple_rsc_order(xmlNode * xml_obj, pe_working_set_t * data_set)
         }
     }
 
-    cons_weight = pe_order_optional;
-    kind = get_ordering_type(xml_obj);
+    cons_weight = pe_order_optional;	/* weightをpe_order_optionalで初期化 */
+    kind = get_ordering_type(xml_obj);	/* よく指定するkind無のscore=INFINITYはpe_order_kind_mandatoryがkindに設定 */
 
     if (kind == pe_order_kind_optional && rsc_then->restart_type == pe_restart_restart) {
         crm_trace("Upgrade : recovery - implies right");
         cons_weight |= pe_order_implies_then;
     }
 
-    if (invert_bool == FALSE) {
+    if (invert_bool == FALSE) {			/* 逆順指定がない場合 */
+    	/* よく指定するkind無のscore=INFINITY,symmetrical=falseは
+    			pe_order_kind_mandatoryがkindに設定で処理される */
+    	/* 		この時、cons_weightは、pe_order_optional | pe_order_asymmetricalとなる */
         cons_weight |= get_asymmetrical_flags(kind);
-    } else {
+    } else {							/* 逆順指定がある場合 */
+    	/* よく指定するkind無のscore=INFINITY,symmetrical=true,firt-action="Start" or "Promote" は
+    			pe_order_kind_mandatoryがkindに設定で処理される */
+    	/* 		この時、cons_weightは、pe_order_optional | pe_order_implies_then | pe_order_runnable_leftとなる */
         cons_weight |= get_flags(id, kind, action_first, action_then, FALSE);
     }
+	/* order情報にセットする */
     order_id = new_rsc_order(rsc_first, action_first, rsc_then, action_then, cons_weight, data_set);
 
     pe_rsc_trace(rsc_first, "order-%d (%s): %s_%s before %s_%s flags=0x%.6x",
@@ -320,7 +330,7 @@ unpack_simple_rsc_order(xmlNode * xml_obj, pe_working_set_t * data_set)
     } else if (kind == pe_order_kind_serialize) {
         return TRUE;
     }
-
+	/* 逆のactionを生成する */
     action_then = invert_action(action_then);
     action_first = invert_action(action_first);
     if (action_then == NULL || action_first == NULL) {
@@ -328,14 +338,18 @@ unpack_simple_rsc_order(xmlNode * xml_obj, pe_working_set_t * data_set)
                        " Please specify the inverse manually.", id);
         return TRUE;
     }
-
-    cons_weight = pe_order_optional;
+	
+    cons_weight = pe_order_optional;	/* 逆のorderのcons_weightをpe_order_optionalで初期化 */
     if (kind == pe_order_kind_optional && rsc_then->restart_type == pe_restart_restart) {
         crm_trace("Upgrade : recovery - implies left");
         cons_weight |= pe_order_implies_first;
     }
-
+	/* 逆orderのcons_weightのフラグを加算する */
+	/*	よく指定するkind無のscore=INFINITY,symmetrical=true,firt-action="Start" or "Promote" は
+    			pe_order_kind_mandatoryがkindに設定で処理される */
+   	/* 		この時、cons_weightは、pe_order_optional | pe_order_implies_firstとなる */
     cons_weight |= get_flags(id, kind, action_first, action_then, TRUE);
+    /* order情報に自動生成した逆のorder情報をセットする */
     order_id = new_rsc_order(rsc_then, action_then, rsc_first, action_first, cons_weight, data_set);
 
     pe_rsc_trace(rsc_then, "order-%d (%s): %s_%s before %s_%s flags=0x%.6x",
@@ -776,10 +790,10 @@ new_rsc_order(resource_t * lh_rsc, const char *lh_task,
 
     lh_key = generate_op_key(lh_rsc->id, lh_task, 0);
     rh_key = generate_op_key(rh_rsc->id, rh_task, 0);
-
+	/* data_set->ordering_constraintsにセットする */
     return custom_action_order(lh_rsc, lh_key, NULL, rh_rsc, rh_key, NULL, type, data_set);
 }
-
+/* 単一のorder情報を生成して、data_set->ordering_constraintsにセットする */
 /* LHS before RHS */
 int
 custom_action_order(resource_t * lh_rsc, char *lh_action_task, action_t * lh_action,

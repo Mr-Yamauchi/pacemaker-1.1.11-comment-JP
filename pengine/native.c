@@ -1713,7 +1713,9 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
     enum pe_action_flags first_flags = first->flags;
 
     if (type & pe_order_asymmetrical) {
+		/* pe_order_asymmetricalなorder情報の場合 */
         resource_t *then_rsc = then->rsc;
+        /* thenリソースが指定されている場合は、thenリソースのロールを取得する */
         enum rsc_role_e then_rsc_role = then_rsc ? then_rsc->fns->state(then_rsc, TRUE) : 0;
 
         if (!then_rsc) {
@@ -1729,6 +1731,8 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
         } else if (!(first->flags & pe_action_runnable)) {
             /* prevent 'then' action from happening if 'first' is not runnable and
              * 'then' has not yet occurred. */
+            /* firstリソースがpe_action_runnableなアクションでないなら、thenリソースの	*/
+            /* pe_action_runnable,pe_action_optionalのフラグをクリアする */
             pe_clear_action_bit(then, pe_action_runnable);
             pe_clear_action_bit(then, pe_action_optional);
             pe_rsc_trace(then->rsc, "Unset optional and runnable on %s", then->uuid);
@@ -1740,7 +1744,7 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
     if (type & pe_order_implies_first) {
         if ((filter & pe_action_optional) && (flags & pe_action_optional) == 0) {
             pe_rsc_trace(first->rsc, "Unset optional on %s because of %s", first->uuid, then->uuid);
-            /* firstリソースのアクションのoptionalフラグをクリアして実行できるようにする */
+            /* pe_action_optionalなfirstリソースのアクションのoptionalフラグをクリアして実行できるようにする */
             pe_clear_action_bit(first, pe_action_optional);
         }
     }
@@ -1768,7 +1772,7 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
         && is_set(then->flags, pe_action_optional)
         && is_set(flags, pe_action_optional) == FALSE) {
         pe_rsc_trace(then->rsc, "Unset optional on %s because of %s", then->uuid, first->uuid);
-        /* firstリソースのアクションのoptionalフラグをクリアして実行できるようにする */
+        /* thenリソースのアクションのoptionalフラグをクリアして実行できるようにする */
         pe_clear_action_bit(then, pe_action_optional);
     }
 

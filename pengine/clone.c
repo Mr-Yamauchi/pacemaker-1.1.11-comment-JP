@@ -1292,13 +1292,15 @@ clone_update_actions(action_t * first, action_t * then, node_t * node, enum pe_a
         clone_variant_data_t *clone_data = NULL;
 
         if (strstr(then->uuid, "_stop_0") || strstr(then->uuid, "_demote_0")) {
+			/* thenアクションがSTOPかDEMOTEの場合は、first側のリソースを採用 */
             get_clone_variant_data(clone_data, first->rsc);
             rsc = first->rsc->id;
         } else {
+			/* その他のアクションの場合は、then側のリソースを採用 */
             get_clone_variant_data(clone_data, then->rsc);
             rsc = then->rsc->id;
         }
-        /* cloneリソースののinterleave値を取り出す */
+        /* 採用したcloneリソースののinterleave値を取り出す */
         interleave = clone_data->interleave;
     }
 
