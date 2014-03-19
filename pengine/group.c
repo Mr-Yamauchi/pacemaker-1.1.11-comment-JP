@@ -239,6 +239,8 @@ group_internal_constraints(resource_t * rsc, pe_working_set_t * data_set)
             child_rsc->restart_type = pe_restart_restart;
 
             order_start_start(last_rsc, child_rsc, start);
+            /* group内の前後のリソースにpe_order_optional|pe_order_restartなstopアクションのorderを生成する */
+            /* order 後リソース stop -> 前リソース stop */
             order_stop_stop(child_rsc, last_rsc, pe_order_optional | pe_order_restart);
 
             if (top->variant == pe_master) {

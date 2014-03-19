@@ -200,9 +200,9 @@ enum pe_graph_flags {
 
 /* *INDENT-OFF* */
 enum pe_action_flags {
-    pe_action_pseudo = 0x00001,
-    pe_action_runnable = 0x00002,
-    pe_action_optional = 0x00004,
+    pe_action_pseudo = 0x00001,								/* PSEUDOなアクション(リソースを伴わない遷移アクション) */
+    pe_action_runnable = 0x00002,							/* 実行可能なアクション */
+    pe_action_optional = 0x00004,							/* オプション実行なアクション */
     pe_action_print_always = 0x00008,
 
     pe_action_have_node_attrs = 0x00010,
@@ -279,9 +279,9 @@ struct pe_action_s {										/* アクション情報 */
     int id;
     int priority;
 
-    resource_t *rsc;
+    resource_t *rsc;										/* アクションの対象リソース情報へのポインタ */
     node_t *node;
-    xmlNode *op_entry;
+    xmlNode *op_entry;										/* リソースの対象アクションのoperation-op-XML情報 */
 
     char *task;
     char *uuid;
@@ -323,11 +323,17 @@ enum pe_link_state {
 enum pe_ordering {
     pe_order_none                  = 0x0,        /* deleted */
     pe_order_optional              = 0x1,    /* pure ordering, nothing implied */
-
+    /* ----firstリソースのアクションを実行可能にする */
+    /* 基本的に、orderのfirstリソースのfirst-actionがoptionalな場合には、optionalを解除して実行可能になる */
     pe_order_implies_first         = 0x10,      /* If 'first' is required, ensure 'then' is too */
+    /* ----thenリソースのアクションを実行可能にする */
+    /* firstリソースのactionがoptinalでない場合で(実行される)、thenリソースのアクションのoptionalの場合*/
+    /* thenリソースのアクションのoptionalフラグをクリアして実行できるようにする */
     pe_order_implies_then          = 0x20,       /* If 'then' is required, ensure 'first' is too */
     pe_order_implies_first_master  = 0x40,      /* Imply 'first' is required when 'then' is required and then's rsc holds Master role. */
-
+	/* ----thenリソースはfirstリソースがpe_action_runnableでなければ実行不可能になる */
+	/* 基本的に、thenリソースのアクションがpe_action_runnableで、firstリソースがpe_action_runnableでない場合 */
+    /* thenリソースのアクションのrunnableフラグをクリアして実行できないようにする */
     pe_order_runnable_left         = 0x100,     /* 'then' requires 'first' to be runnable */
 
     pe_order_restart               = 0x1000,    /* 'then' is runnable if 'first' is optional or runnable */

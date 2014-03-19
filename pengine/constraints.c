@@ -156,6 +156,7 @@ get_ordering_type(xmlNode * xml_obj)
             /*     kind_e = pe_order_kind_optional; */
         }
 		/* 良く設定するkind指定なし、score=INFINITYの場合は、pe_order_kind_mandatoryとなる */
+		/* 良く設定するkind指定なし、score=０の場合は、pe_order_kind_optionalとなる */
     } else if (safe_str_eq(kind, "Mandatory")) {
         kind_e = pe_order_kind_mandatory;
 
@@ -297,22 +298,34 @@ unpack_simple_rsc_order(xmlNode * xml_obj, pe_working_set_t * data_set)
 
     cons_weight = pe_order_optional;	/* weightをpe_order_optionalで初期化 */
     kind = get_ordering_type(xml_obj);	/* よく指定するkind無のscore=INFINITYはpe_order_kind_mandatoryがkindに設定 */
-
+										/* 良く設定するkind指定なし、score=０の場合は、pe_order_kind_optionalに設定 */
     if (kind == pe_order_kind_optional && rsc_then->restart_type == pe_restart_restart) {
+		/* 良く設定するkind指定なし、score=０の場合は、pe_order_kind_optionalとなり、 */
+		/* この時に、thenリソースのrestart_typeがpe_restart_restartの場合は、pe_order_implies_thenフラグが立つ */
+		/* これによって、kind指定なし、score=０の場合は、firstリソースのstartがかかる場合（再startを含む) */
+		/* thenリソースにもstartがかかる */
         crm_trace("Upgrade : recovery - implies right");
         cons_weight |= pe_order_implies_then;
     }
 
     if (invert_bool == FALSE) {			/* 逆順指定がない場合 */
+    	/* 非対称なorderのフラグを決定する */
+        cons_weight |= get_asymmetrical_flags(kind);
     	/* よく指定するkind無のscore=INFINITY,symmetrical=falseは
     			pe_order_kind_mandatoryがkindに設定で処理される */
     	/* 		この時、cons_weightは、pe_order_optional | pe_order_asymmetricalとなる */
-        cons_weight |= get_asymmetrical_flags(kind);
+    	/* pe_order_asymmetricalなので */
+    	/* thenリソースが停止(STOPPPED)している場合に、then-actionが"STOP"のorderは処理しない制約が作られる */
+    	/* thenリソースが開始(STARTED)している場合に、then-actionが"START"のorderは処理しない制約が作られる */
+    	/* firstリソースのaction_firstがpe_action_runnableでなければ、then-actionの */
+    	/* pe_action_runnable,pe_order_optionalがクリアされる制約が作られる */
     } else {							/* 逆順指定がある場合 */
+        cons_weight |= get_flags(id, kind, action_first, action_then, FALSE);
     	/* よく指定するkind無のscore=INFINITY,symmetrical=true,firt-action="Start" or "Promote" は
     			pe_order_kind_mandatoryがkindに設定で処理される */
     	/* 		この時、cons_weightは、pe_order_optional | pe_order_implies_then | pe_order_runnable_leftとなる */
-        cons_weight |= get_flags(id, kind, action_first, action_then, FALSE);
+    	/* pe_order_runnable_leftなので、action_firstがpe_action_runnableでなければ、action_thenは実行されない制約が作られる */
+    	/* pe_order_implies_thenなので、action_thenがoptionalな場合は、解除されて実行可能になる制約が作られる */
     }
 	/* order情報にセットする */
     order_id = new_rsc_order(rsc_first, action_first, rsc_then, action_then, cons_weight, data_set);
@@ -348,6 +361,7 @@ unpack_simple_rsc_order(xmlNode * xml_obj, pe_working_set_t * data_set)
 	/*	よく指定するkind無のscore=INFINITY,symmetrical=true,firt-action="Start" or "Promote" は
     			pe_order_kind_mandatoryがkindに設定で処理される */
    	/* 		この時、cons_weightは、pe_order_optional | pe_order_implies_firstとなる */
+   	/* pe_order_implies_firstにより、action_firstが実行される時に、action_thenがoptionalな場合は、解除されて実行可能になる制約が作られる */
     cons_weight |= get_flags(id, kind, action_first, action_then, TRUE);
     /* order情報に自動生成した逆のorder情報をセットする */
     order_id = new_rsc_order(rsc_then, action_then, rsc_first, action_first, cons_weight, data_set);
@@ -848,7 +862,7 @@ custom_action_order(resource_t * lh_rsc, char *lh_action_task, action_t * lh_act
 
     return order->id;
 }
-
+/* 非対称なorderのフラグを取得する */
 enum pe_ordering
 get_asymmetrical_flags(enum pe_order_kind kind)
 {
@@ -861,7 +875,7 @@ get_asymmetrical_flags(enum pe_order_kind kind)
     }
     return flags;
 }
-
+/* 対象なorderのフラグを取得する */
 enum pe_ordering
 get_flags(const char *id, enum pe_order_kind kind,
           const char *action_first, const char *action_then, gboolean invert)

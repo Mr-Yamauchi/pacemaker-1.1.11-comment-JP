@@ -351,7 +351,7 @@ check_actions_for(xmlNode * rsc_entry, resource_t * rsc, node_t * node, pe_worki
     if (check_rsc_parameters(rsc, node, rsc_entry, TRUE, data_set)) {
         DeleteRsc(rsc, node, FALSE, data_set);
     }
-
+	/* lrm_rsc_opノードから作業リストを生成する */
     for (rsc_op = __xml_first_child(rsc_entry); rsc_op != NULL; rsc_op = __xml_next(rsc_op)) {
         if (crm_str_eq((const char *)rsc_op->name, XML_LRM_TAG_RSC_OP, TRUE)) {
             op_list = g_list_prepend(op_list, rsc_op);
@@ -369,6 +369,7 @@ check_actions_for(xmlNode * rsc_entry, resource_t * rsc, node_t * node, pe_worki
         if (start_index < stop_index) {
             /* stopped */
             /* リソースが停止中の場合は処理しない breakで良くない？ */
+            /* stopしていていmonitorが動いている場合？か? */
             continue;
         } else if (offset < start_index) {
             /* action occurred prior to a start */
@@ -488,11 +489,12 @@ check_actions(pe_working_set_t * data_set)
 
             node = pe_find_node_id(data_set->nodes, id);
 
-            if (node == NULL) {
+            if (node == NULL) {	/* クラスタに存在しないノードのstatus情報は処理しない */
                 continue;
 
             /* Still need to check actions for a maintenance node to cancel existing monitor operations */
             } else if (can_run_resources(node) == FALSE && node->details->maintenance == FALSE) {
+				/* ノードがリソースを起動できないノードの場合で、メンテナンスモードがFALSEの場合は処理しない */
                 crm_trace("Skipping param check for %s: cant run resources", node->details->uname);
                 continue;
             }
@@ -500,18 +502,19 @@ check_actions(pe_working_set_t * data_set)
             crm_trace("Processing node %s", node->details->uname);
             if (node->details->online || is_set(data_set->flags, pe_flag_stonith_enabled)) {
                 xmlNode *rsc_entry = NULL;
-
+				/* lrm_resourcesノード内のすべての子ノードを処理する */
                 for (rsc_entry = __xml_first_child(lrm_rscs); rsc_entry != NULL;
                      rsc_entry = __xml_next(rsc_entry)) {
                     if (crm_str_eq((const char *)rsc_entry->name, XML_LRM_TAG_RESOURCE, TRUE)) {
-
+						/* lrm_resourceノードの場合 */
                         if (xml_has_children(rsc_entry)) {
                             GListPtr gIter = NULL;
                             GListPtr result = NULL;
+                            /* lrm_resourceのidから対象のリソースidを決定する */
                             const char *rsc_id = ID(rsc_entry);
 
                             CRM_CHECK(rsc_id != NULL, return);
-
+							/* 対象リソースidからリソース情報を検索する */
                             result = find_rsc_list(NULL, NULL, rsc_id, TRUE, FALSE, data_set);
                             for (gIter = result; gIter != NULL; gIter = gIter->next) {
                                 resource_t *rsc = (resource_t *) gIter->data;
@@ -519,6 +522,7 @@ check_actions(pe_working_set_t * data_set)
                                 if (rsc->variant != pe_native) {
                                     continue;
                                 }
+                                /* 現在のリソース状態(lrm_resourceの情報から事前に実行するアクションを決定する */
                                 check_actions_for(rsc_entry, rsc, node, data_set);
                             }
                             g_list_free(result);
@@ -588,6 +592,10 @@ common_apply_stickiness(resource_t * rsc, node_t * node, pe_working_set_t * data
         if (current == NULL) {
 
         } else if (match != NULL || is_set(data_set->flags, pe_flag_symmetric_cluster)) {
+			/* すでにリソースが起動済なノードで、				*/
+			/* 				リソースの配置可能なノードの場合か 	*/
+			/* 				対象クラスタの場合には、stickiness値をrsc->allowed_nodesの */
+			/* 				対象ノードのweightに加算する */
             resource_t *sticky_rsc = rsc;
 
             resource_location(sticky_rsc, node, rsc->stickiness, "stickiness", data_set);
@@ -999,7 +1007,7 @@ stage3(pe_working_set_t * data_set)
 
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *rsc = (resource_t *) gIter->data;
-
+		/* すべてのリソースの内部的な制約を生成する */
         rsc->cmds->internal_constraints(rsc, data_set);
     }
 
@@ -1012,6 +1020,10 @@ stage3(pe_working_set_t * data_set)
 gboolean
 stage4(pe_working_set_t * data_set)
 {
+	/* cibのlrm_resourceから現在の状態をリソース情報に反映する */
+	/* 		孤立リソースの為のアクションや */
+	/* 		リソースのパラメータが変わった場合のrestartの為のアクションや、 */
+	/* 		メンテナンスモードへ移行した為のmonitorの停止のアクションもこの時点で生成される */
     check_actions(data_set);
     return TRUE;
 }
@@ -2451,7 +2463,7 @@ stage8(pe_working_set_t * data_set)
    }
    );
 */
-
+	/* すべてのリソースのアクション情報から実行するアクションをグラフにセットする */
     gIter = data_set->resources;
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *rsc = (resource_t *) gIter->data;
@@ -2464,7 +2476,7 @@ stage8(pe_working_set_t * data_set)
 
     /* catch any non-resource specific actions */
     crm_trace("processing non-resource actions");
-
+	/* リソースに関係しないアクションをグラフにセットする */
     gIter = data_set->actions;
     for (; gIter != NULL; gIter = gIter->next) {
         action_t *action = (action_t *) gIter->data;

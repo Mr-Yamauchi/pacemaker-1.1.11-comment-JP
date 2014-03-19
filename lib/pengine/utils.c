@@ -348,7 +348,7 @@ sort_rsc_priority(gconstpointer a, gconstpointer b)
 
     return 0;
 }
-
+/* アクションを生成する */
 action_t *
 custom_action(resource_t * rsc, char *key, const char *task,
               node_t * on_node, gboolean optional, gboolean save_action,
@@ -361,10 +361,12 @@ custom_action(resource_t * rsc, char *key, const char *task,
     CRM_CHECK(task != NULL, return NULL);
 
     if (save_action && rsc != NULL) {
+		/* 対象リソースに生成するアクションが存在するかどうか検索する */
         possible_matches = find_actions(rsc->actions, key, on_node);
     }
 
     if (possible_matches != NULL) {
+		/* 存在した場合は、そのアクション情報を更新対象として設定する */
         if (g_list_length(possible_matches) > 1) {
             pe_warn("Action %s for %s on %s exists %d times",
                     task, rsc ? rsc->id : "<NULL>",
@@ -379,12 +381,13 @@ custom_action(resource_t * rsc, char *key, const char *task,
     }
 
     if (action == NULL) {
+		/* リソースのアクション以外で保存しないアクションの場合か、新規にアクションを生成する場合 */
         if (save_action) {
             pe_rsc_trace(rsc, "Creating%s action %d: %s for %s on %s",
                          optional ? "" : " manditory", data_set->action_id, key,
                          rsc ? rsc->id : "<NULL>", on_node ? on_node->details->uname : "<NULL>");
         }
-
+		/* アクション情報エリアの確保 */
         action = calloc(1, sizeof(action_t));
         if (save_action) {
             action->id = data_set->action_id++;
@@ -398,9 +401,10 @@ custom_action(resource_t * rsc, char *key, const char *task,
             action->node = node_copy(on_node);
         }
         action->uuid = strdup(key);
-
+		/* pe_action_failure_is_fatal,pe_action_runnableのフラグをセット */
         pe_set_action_bit(action, pe_action_failure_is_fatal);
         pe_set_action_bit(action, pe_action_runnable);
+        /* オプションフラグのセット */
         if (optional) {
             pe_set_action_bit(action, pe_action_optional);
         } else {
@@ -417,7 +421,7 @@ custom_action(resource_t * rsc, char *key, const char *task,
   action->processed  = FALSE;
   action->seen_count = 0;
 */
-
+		/* アクションのextra,metaハッシュテーブルを生成 */
         action->extra = g_hash_table_new_full(crm_str_hash, g_str_equal, free, free);
 
         action->meta = g_hash_table_new_full(crm_str_hash, g_str_equal, free, free);
@@ -429,8 +433,9 @@ custom_action(resource_t * rsc, char *key, const char *task,
 
         if (rsc != NULL) {
 			/* リソースが指定されている場合 */
+			/* リソースのoperation情報から対象アクションのopのXMLをセットする */
             action->op_entry = find_rsc_op_entry_helper(rsc, key, TRUE);
-
+			/* リソースのop情報からアクション情報をセットする */
             unpack_operation(action, action->op_entry, rsc->container, data_set);
 
             if (save_action) {
@@ -445,11 +450,12 @@ custom_action(resource_t * rsc, char *key, const char *task,
     }
 
     if (optional == FALSE) {
+		/* オプション指定がFALSEの場合は、アクション情報のpe_action_optionalをクリアする */
         pe_rsc_trace(rsc, "Action %d (%s) marked manditory", action->id, action->uuid);
         pe_clear_action_bit(action, pe_action_optional);
     }
 
-    if (rsc != NULL) {
+    if (rsc != NULL) {		/* リソースのアクション情報生成の場合 */
         enum action_tasks a_task = text2task(action->task);
         int warn_level = LOG_TRACE;
 
@@ -469,15 +475,18 @@ custom_action(resource_t * rsc, char *key, const char *task,
             /* leave untouched */
 
         } else if (action->node == NULL) {
+			/* アクションの実行ノードが未決定の場合は、pe_action_runnableフラグをクリアして実行できないアクションにする */
             pe_clear_action_bit(action, pe_action_runnable);
 
         } else if (is_not_set(rsc->flags, pe_rsc_managed)
                    && g_hash_table_lookup(action->meta, XML_LRM_ATTR_INTERVAL) == NULL) {
             crm_debug("Action %s (unmanaged)", action->uuid);
+			/* unmanagedなリソースで、monitorの場合は、pe_action_optionalフラグをセットしておく */
             pe_set_action_bit(action, pe_action_optional);
 /*   			action->runnable = FALSE; */
 
         } else if (action->node->details->online == FALSE) {
+			/* アクションの実行ノードがONLINEでない場合は、pe_action_runnableフラグをクリアして実行できないアクションにする */
             pe_clear_action_bit(action, pe_action_runnable);
             do_crm_log(warn_level, "Action %s on %s is unrunnable (offline)",
                        action->uuid, action->node->details->uname);
@@ -488,11 +497,13 @@ custom_action(resource_t * rsc, char *key, const char *task,
             }
 
         } else if (action->node->details->pending) {
+			/* アクションの実行ノードがペンディング状態の場合は、pe_action_runnableフラグをクリアして実行できないアクションにする */
             pe_clear_action_bit(action, pe_action_runnable);
             do_crm_log(warn_level, "Action %s on %s is unrunnable (pending)",
                        action->uuid, action->node->details->uname);
 
         } else if (action->needs == rsc_req_nothing) {
+			/* アクションのneedsがrsc_req_nothingの場合は、pe_action_runnableフラグをセットしてて実行可能する */
             pe_rsc_trace(rsc, "Action %s doesnt require anything", action->uuid);
             pe_set_action_bit(action, pe_action_runnable);
 #if 0
@@ -506,6 +517,7 @@ custom_action(resource_t * rsc, char *key, const char *task,
 #endif
         } else if (is_set(data_set->flags, pe_flag_have_quorum) == FALSE
                    && data_set->no_quorum_policy == no_quorum_stop) {
+			/* クラスタがQUORUMを保持していない状態で、no_quorum_stopの場合は、pe_action_runnableフラグをクリアして実行できないアクションにする */
             pe_clear_action_bit(action, pe_action_runnable);
             crm_debug("%s\t%s (cancelled : quorum)", action->node->details->uname, action->uuid);
 
@@ -513,24 +525,31 @@ custom_action(resource_t * rsc, char *key, const char *task,
                    && data_set->no_quorum_policy == no_quorum_freeze) {
             pe_rsc_trace(rsc, "Check resource is already active");
             if (rsc->fns->active(rsc, TRUE) == FALSE) {
+				/* クラスタがQUORUMを保持していない状態で、no_quorum_freezeの場合で */
+				/* アクションの対象リソースがactiveでない場合は、pe_action_runnableフラグをクリアして実行できないアクションにする */
+				/* --- freeze状態なので、生成するactiveでないリソースのアクションは実行しない */
                 pe_clear_action_bit(action, pe_action_runnable);
                 pe_rsc_debug(rsc, "%s\t%s (cancelled : quorum freeze)",
                              action->node->details->uname, action->uuid);
             }
 
         } else {
+			/* その他の場合は、pe_action_runnableフラグをセットしてて実行可能する */
             pe_rsc_trace(rsc, "Action %s is runnable", action->uuid);
             pe_set_action_bit(action, pe_action_runnable);
         }
 
         if (save_action) {
+			/* 保存するアクション情報の場合は、リソースにフラグを反映する */
             switch (a_task) {
                 case stop_rsc:
-                    set_bit(rsc->flags, pe_rsc_stopping);
+                    set_bit(rsc->flags, pe_rsc_stopping);	/* STOPアクションの場合は、stoppingフラグをセット */
                     break;
                 case start_rsc:
+                	/* STARTアクションの場合は、pe_rsc_startingフラグを一旦クリア */
                     clear_bit(rsc->flags, pe_rsc_starting);
                     if (is_set(action->flags, pe_action_runnable)) {
+						/* アクションが実行可能な場合は、pe_rsc_startingをセット */
                         set_bit(rsc->flags, pe_rsc_starting);
                     }
                     break;
@@ -541,7 +560,7 @@ custom_action(resource_t * rsc, char *key, const char *task,
     }
 
     free(key);
-    return action;
+    return action;	/* 生成したアクション情報を返す */
 }
 
 static const char *

@@ -1095,12 +1095,13 @@ native_create_actions(resource_t * rsc, pe_working_set_t * data_set)
                  role2text(rsc->role), role2text(rsc->next_role));
 
     if (rsc->running_on) {
+		/* リソースが実行中の場合は、ノード情報をcurrentにセット */
         current = rsc->running_on->data;
     }
 
     for (gIter = rsc->running_on; gIter != NULL; gIter = gIter->next) {
         /* node_t *n = (node_t *) gIter->data; */
-
+		/* リソースが実行中の場合は、実行中のノード数をカウント */
         num_active_nodes++;
     }
 
@@ -1120,7 +1121,7 @@ native_create_actions(resource_t * rsc, pe_working_set_t * data_set)
     }
 
     if (num_active_nodes > 1) {
-
+		/* リソースが複数ノードので実行されている場合 */
         if (num_active_nodes == 2
             && chosen
             && rsc->partial_migration_target
@@ -1135,7 +1136,7 @@ native_create_actions(resource_t * rsc, pe_working_set_t * data_set)
         } else {
             const char *type = crm_element_value(rsc->xml, XML_ATTR_TYPE);
             const char *class = crm_element_value(rsc->xml, XML_AGENT_ATTR_CLASS);
-
+			/* スプリットブレイン状態のワーニングを出力 */
             pe_proc_err("Resource %s (%s::%s) is active on %d nodes %s",
                         rsc->id, class, type, num_active_nodes, recovery2text(rsc->recovery_type));
             crm_warn("See %s for more information.",
@@ -1159,14 +1160,17 @@ native_create_actions(resource_t * rsc, pe_working_set_t * data_set)
 
     if (current && chosen && current->details != chosen->details) {
         pe_rsc_trace(rsc, "Moving %s", rsc->id);
+        /* リソース移動を行う場合は、対象リソースのSTOPアクションがoptionalで生成されないようにフラグを変更 */
         need_stop = TRUE;
 
     } else if (is_set(rsc->flags, pe_rsc_failed)) {
         pe_rsc_trace(rsc, "Recovering %s", rsc->id);
+        /* リカバリを行う場合は、対象リソースのSTOPアクションがoptionalで生成されないようにフラグを変更 */
         need_stop = TRUE;
 
     } else if (is_set(rsc->flags, pe_rsc_block)) {
         pe_rsc_trace(rsc, "Block %s", rsc->id);
+        /* ブロック停止を行う場合は、対象リソースのSTOPアクションがoptionalで生成されないようにフラグを変更 */
         need_stop = TRUE;
 
     } else if (rsc->role > RSC_ROLE_STARTED && current != NULL && chosen != NULL) {
@@ -1181,8 +1185,10 @@ native_create_actions(resource_t * rsc, pe_working_set_t * data_set)
     pe_rsc_trace(rsc, "Creating actions for %s: %s->%s", rsc->id,
                  role2text(rsc->role), role2text(rsc->next_role));
 
-    role = rsc->role;
+    role = rsc->role;		/* 現在のロールをセット */
     /* Potentiall optional steps on brining the resource down and back up to the same level */
+	/* 現在のロールがSTOPPPED(リソースが停止)でない場合は、リソースを停止する為のactionを生成しておく */
+	/* --- 現在の起動中のノードでのリソース停止までのactionを生成しておく --- */
     while (role != RSC_ROLE_STOPPED) {
         next_role = rsc_state_matrix[role][RSC_ROLE_STOPPED];
         pe_rsc_trace(rsc, "Down: Executing: %s->%s (%s)%s", role2text(role), role2text(next_role),
@@ -1192,8 +1198,9 @@ native_create_actions(resource_t * rsc, pe_working_set_t * data_set)
         }
         role = next_role;
     }
-
-
+    
+	/* STOPPPED(リソースの停止)から現在のロールまでのactionを生成しておく */
+	/* --- 次のノードでのSTOPPPED(リソースが停止)から遷移先のロールまでのactionを生成しておく --- */
     while (rsc->role <= rsc->next_role && role != rsc->role && is_not_set(rsc->flags, pe_rsc_block)) {
         next_role = rsc_state_matrix[role][rsc->role];
         pe_rsc_trace(rsc, "Up:   Executing: %s->%s (%s)%s", role2text(role), role2text(next_role),
@@ -1203,9 +1210,9 @@ native_create_actions(resource_t * rsc, pe_working_set_t * data_set)
         }
         role = next_role;
     }
-    role = rsc->role;
-
+    role = rsc->role;		/* 現在のロールをセット */
     /* Required steps from this role to the next */
+	/* 現在のロールから遷移先のロールまでのactionを生成しておく */
     while (role != rsc->next_role) {
         next_role = rsc_state_matrix[role][rsc->next_role];
         pe_rsc_trace(rsc, "Role: Executing: %s->%s = (%s)", role2text(role),
@@ -1217,14 +1224,18 @@ native_create_actions(resource_t * rsc, pe_working_set_t * data_set)
     }
 
     if(is_set(rsc->flags, pe_rsc_block)) {
+		/* リソースがon-fail="block"で故障している場合は、monitorは実行しない */
         pe_rsc_trace(rsc, "No monitor additional ops for blocked resource");
 
     } else if (rsc->next_role != RSC_ROLE_STOPPED || is_set(rsc->flags, pe_rsc_managed) == FALSE) {
+		/* 次のロールがSTOPPEDでないか、pe_rsc_managedフラグがセットされていない場合  */
+		/* START action, Monitor action, Monitorのstop actionを生成しておく */
         pe_rsc_trace(rsc, "Monitor ops for active resource");
         start = start_action(rsc, chosen, TRUE);
         Recurring(rsc, start, chosen, data_set);
         Recurring_Stopped(rsc, start, chosen, data_set);
     } else {
+		/* その他の場合は、Mnitorのstop actionを生成しておく */
         pe_rsc_trace(rsc, "Monitor ops for in-active resource");
         Recurring_Stopped(rsc, NULL, NULL, data_set);
     }
@@ -1242,7 +1253,7 @@ rsc_avoids_remote_nodes(resource_t *rsc)
         }
     }
 }
-
+/* native(primitive)リソースの内部的な制約の生成 */
 void
 native_internal_constraints(resource_t * rsc, pe_working_set_t * data_set)
 {
@@ -1250,18 +1261,22 @@ native_internal_constraints(resource_t * rsc, pe_working_set_t * data_set)
 
     resource_t *top = uber_parent(rsc);
     int type = pe_order_optional | pe_order_implies_then | pe_order_restart;
+    /* 対象リソースがstonithリソースかどうか判定する */
     gboolean is_stonith =
         (rsc->xml && safe_str_eq(crm_element_value(rsc->xml, XML_AGENT_ATTR_CLASS), "stonith")) ?
         TRUE : FALSE;
-
+	/* 対象リソースのSTOP -> STARのorderをpe_order_optional | pe_order_implies_then | pe_order_restartで生成しておく */
     custom_action_order(rsc, generate_op_key(rsc->id, RSC_STOP, 0), NULL,
                         rsc, generate_op_key(rsc->id, RSC_START, 0), NULL, type, data_set);
 
     if (top->variant == pe_master || rsc->role > RSC_ROLE_SLAVE) {
+		/* リソースの親がMasterSlaveリソースか、対象リソースがMASTERの状態の場合 */
+		/* 対象リソースのDEMOTE->STOPのorderをpe_order_implies_first_masterで生成しておく */
         custom_action_order(rsc, generate_op_key(rsc->id, RSC_DEMOTE, 0), NULL,
                             rsc, generate_op_key(rsc->id, RSC_STOP, 0), NULL,
                             pe_order_implies_first_master, data_set);
-
+		/* 対象リソースのSTART->PROMOTEのorderをpe_order_runnable_leftで生成しておく */
+		/* pe_order_runnable_leftにより、STARTがpe_action_runnableでなければ、PROMOTEは実行されない */
         custom_action_order(rsc, generate_op_key(rsc->id, RSC_START, 0), NULL,
                             rsc, generate_op_key(rsc->id, RSC_PROMOTE, 0), NULL,
                             pe_order_runnable_left, data_set);
@@ -1275,7 +1290,7 @@ native_internal_constraints(resource_t * rsc, pe_working_set_t * data_set)
     {
 		/* psedoアクションを取得取得する(実行するアクションリスト(data_set->actions)から取得するが、リストに無い場合は生成される) */
         action_t *all_stopped = get_pseudo_op(ALL_STOPPED, data_set);
-
+		/* 対象リソースのSTOP->ALL_STOPPED(pseudo)のorderをpe_order_implies_then | pe_order_runnable_leftで生成する */
         custom_action_order(rsc, stop_key(rsc), NULL,
                             NULL, strdup(all_stopped->task), all_stopped,
                             pe_order_implies_then | pe_order_runnable_left, data_set);
@@ -1341,6 +1356,7 @@ native_internal_constraints(resource_t * rsc, pe_working_set_t * data_set)
     if (rsc->is_remote_node || is_stonith) {
         /* don't allow remote nodes to run stonith devices
          * or remote connection resources.*/
+        /* remote_nodeかstonithリソースの場合 */
         rsc_avoids_remote_nodes(rsc);
     }
 
@@ -1742,9 +1758,12 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
     }
 
     if (type & pe_order_implies_first) {
+		/* pe_order_implies_firstなorder情報の場合で */
         if ((filter & pe_action_optional) && (flags & pe_action_optional) == 0) {
             pe_rsc_trace(first->rsc, "Unset optional on %s because of %s", first->uuid, then->uuid);
-            /* pe_action_optionalなfirstリソースのアクションのoptionalフラグをクリアして実行できるようにする */
+            /* firstリソースのactionがoptinalな場合 */
+            /* firstリソースのアクションのoptionalフラグをクリアして実行できるようにする */
+            /* ※ただし、firstリソースのアクションのpe_action_runnableがセットされていなければ実行はされない */
             pe_clear_action_bit(first, pe_action_optional);
         }
     }
@@ -1753,7 +1772,10 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
         if ((filter & pe_action_optional) &&
             ((then->flags & pe_action_optional) == FALSE) &&
             then->rsc && (then->rsc->role == RSC_ROLE_MASTER)) {
+			/* pe_order_implies_first_masterなorder情報の場合で */
+			/* thenリソースのアクションがoptionalでなくて、thenリソースが設定されてて、roleがMASTERの場合 */
             /* firstリソースのアクションのoptional実行フラグをクリアして実行できるようにする */
+            /* ※ただし、firstリソースのアクションのpe_action_runnableがセットされていなければ実行はされない */
             clear_bit(first->flags, pe_action_optional);
         }
     }
@@ -1763,6 +1785,8 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
         && is_set(then->flags, pe_action_runnable)
         && is_set(flags, pe_action_runnable) == FALSE) {
         pe_rsc_trace(then->rsc, "Unset runnable on %s because of %s", then->uuid, first->uuid);
+		/* pe_order_runnable_leftなorder情報の場合で */
+		/* thenリソースのアクションがpe_action_runnableで、firstリソースがpe_action_runnableでない場合 */
         /* thenリソースのアクションのrunnableフラグをクリアして実行できないようにする */
         pe_clear_action_bit(then, pe_action_runnable);
     }
@@ -1772,11 +1796,14 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
         && is_set(then->flags, pe_action_optional)
         && is_set(flags, pe_action_optional) == FALSE) {
         pe_rsc_trace(then->rsc, "Unset optional on %s because of %s", then->uuid, first->uuid);
+        /* firstリソースのactionがoptinalでない場合で(実行される)、thenリソースのアクションのoptionalの場合*/
         /* thenリソースのアクションのoptionalフラグをクリアして実行できるようにする */
+        /* ※ただし、thenリソースのアクションのpe_action_runnableがセットされていなければ実行はされない */
         pe_clear_action_bit(then, pe_action_optional);
     }
 
     if (is_set(type, pe_order_restart)) {
+		/* pe_order_restartなorder情報の場合で */
         const char *reason = NULL;
 
         CRM_ASSERT(first->rsc && first->rsc->variant == pe_native);
@@ -1795,12 +1822,16 @@ native_update_actions(action_t * first, action_t * then, node_t * node, enum pe_
         if (reason && is_set(first->flags, pe_action_optional)
             && is_set(first->flags, pe_action_runnable)) {
             pe_rsc_trace(first->rsc, "Handling %s: %s -> %s", reason, first->uuid, then->uuid);
+        	/* firstリソースのアクションのoptionalフラグをクリアして実行できるようにする */
             pe_clear_action_bit(first, pe_action_optional);
         }
 
         if (reason && is_not_set(first->flags, pe_action_optional)
             && is_not_set(first->flags, pe_action_runnable)) {
             pe_rsc_trace(then->rsc, "Handling %s: %s -> %s", reason, first->uuid, then->uuid);
+        	/* thenリソースのアクションのpe_action_runnableフラグをクリアして実行不可にする */
+        	/* ※最後のresourceが停止(STOP）する場合に、リソースの内部制約のSTOP(start)->START(then)のorder */
+        	/* のSTART(then)を実行させないようにしている */
             pe_clear_action_bit(then, pe_action_runnable);
         }
     }
@@ -2158,14 +2189,14 @@ LogActions(resource_t * rsc, pe_working_set_t * data_set, gboolean terminal)
                    role2text(rsc->next_role), next->details->uname, allowed ? "" : " - blocked");
     }
 }
-
+/* 単一リソースを停止するアクションを生成する */
 gboolean
 StopRsc(resource_t * rsc, node_t * next, gboolean optional, pe_working_set_t * data_set)
 {
     GListPtr gIter = NULL;
 
     pe_rsc_trace(rsc, "%s", rsc->id);
-
+	/* リソースの起動済ノード情報をすべて処理する */
     for (gIter = rsc->running_on; gIter != NULL; gIter = gIter->next) {
         node_t *current = (node_t *) gIter->data;
         action_t *stop;
@@ -2182,28 +2213,34 @@ StopRsc(resource_t * rsc, node_t * next, gboolean optional, pe_working_set_t * d
         }
 
         pe_rsc_trace(rsc, "%s on %s", rsc->id, current->details->uname);
+        /* 起動済のノードでのstopアクションを生成する */
         stop = stop_action(rsc, current, optional);
 
         if (is_not_set(rsc->flags, pe_rsc_managed)) {
+			/* リソースがunmanagedリソースの場合は、生成したstopアクションのpe_action_runnableフラグをクリアする */
             update_action_flags(stop, pe_action_runnable | pe_action_clear);
         }
 
         if (is_set(data_set->flags, pe_flag_remove_after_stop)) {
+			/* pe_flag_remove_after_stopなら起動済のノードでのリソース削除のアクションを生成する */
             DeleteRsc(rsc, current, optional, data_set);
         }
     }
 
     return TRUE;
 }
-
+/* 単一リソースを起動するアクションを生成する */
 gboolean
 StartRsc(resource_t * rsc, node_t * next, gboolean optional, pe_working_set_t * data_set)
 {
     action_t *start = NULL;
 
     pe_rsc_trace(rsc, "%s on %s %d", rsc->id, next ? next->details->uname : "N/A", optional);
+    /* 指定ノードでのstartアクションを生成する */
     start = start_action(rsc, next, TRUE);
     if (is_set(start->flags, pe_action_runnable) && optional == FALSE) {
+		/* すでにstartアクションが生成されていて、pe_action_runnableなアクションで */
+		/* startアクションをオプションで生成しない場合は、startアクションのpe_action_optionalをクリアする */
         update_action_flags(start, pe_action_optional | pe_action_clear);
     }
     return TRUE;
@@ -3035,6 +3072,7 @@ MigrateRsc(resource_t * rsc, action_t * stop, action_t * start, pe_working_set_t
     }
 
     if (crm_is_true(value) == FALSE) {
+		/* 対象リソースのallow_migrateがFALSEなら処理しない */
         return;
     }
 

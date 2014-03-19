@@ -191,7 +191,9 @@ graph_update_action(action_t * first, action_t * then, node_t * node, enum pe_ac
         processed = TRUE;
         if (then->rsc) {
 			/* thenリソースが指定されている場合は、thenリソースのupdate_actionを実行する */
-			/* 		thenリソースのアクションがoptionalでoptional実行解除可能であれば解除して実行可能にする */
+       		/* firstリソースのactionがoptinalでない場合で(実行される)、thenリソースのアクションのoptionalの場合*/
+        	/* thenリソースのアクションのoptionalフラグをクリアして実行できるようにする */
+        	/* ※ただし、thenリソースのアクションのpe_action_runnableがセットされていなければ実行はされない */
             changed |=
                 then->rsc->cmds->update_actions(first, then, node, flags & pe_action_optional,
                                                 pe_action_optional, pe_order_implies_then);
@@ -209,6 +211,7 @@ graph_update_action(action_t * first, action_t * then, node_t * node, enum pe_ac
     }
 
     if ((type & pe_order_restart) && then->rsc) {
+		/* 前に実行するアクションのorderのフラグがpe_order_restartで、thenリソースがある場合 */
         enum pe_action_flags restart = (pe_action_optional | pe_action_runnable);
 
         processed = TRUE;
@@ -231,7 +234,8 @@ graph_update_action(action_t * first, action_t * then, node_t * node, enum pe_ac
         processed = TRUE;
         if (first->rsc) {
 			/* firstリソースが指定されている場合は、firstリソースのupdate_actionを実行する */
-			/* 		firstリソースのアクションがoptionalでoptional実行解除可能であれば解除して実行可能にする */
+			/* 		firstリソースのアクションがoptionalなら、optionalを解除して実行可能にする */
+        	/* ※ただし、firstリソースのアクションのpe_action_runnableがセットされていなければ実行はされない */
             changed |=
                 first->rsc->cmds->update_actions(first, then, node, flags,
                                                  pe_action_optional, pe_order_implies_first);
@@ -288,8 +292,12 @@ graph_update_action(action_t * first, action_t * then, node_t * node, enum pe_ac
     }
 
     if (type & pe_order_runnable_left) {
+		/* 前に実行するアクションのorderのフラグがpe_order_runnable_leftの場合 */
         processed = TRUE;
         if (then->rsc) {
+			/* thenリソースが指定されている場合は、firstリソースのupdate_actionを実行する */
+			/* 		firstリソースのアクションがでpe_action_runnableでなければ、*/
+			/*      thenリソースのpe_action_runnableを解除して実行不可にする */
             changed |=
                 then->rsc->cmds->update_actions(first, then, node, flags,
                                                 pe_action_runnable, pe_order_runnable_left);
@@ -307,6 +315,7 @@ graph_update_action(action_t * first, action_t * then, node_t * node, enum pe_ac
     }
 
     if (type & pe_order_optional) {
+		/* 前に実行するアクションのorderのフラグがpe_order_optionalの場合 */
         processed = TRUE;
         if (then->rsc) {
             changed |=
@@ -846,6 +855,7 @@ should_dump_action(action_t * action)
     CRM_CHECK(action != NULL, return FALSE);
 
     if (is_set(action->flags, pe_action_dumped)) {
+		/* 処理済の場合は処理しない */
         crm_trace("action %d (%s) was already dumped", action->id, action->uuid);
         return FALSE;
 
@@ -888,6 +898,7 @@ should_dump_action(action_t * action)
     }
 
     if (is_set(action->flags, pe_action_runnable) == FALSE) {
+		/* 実行しないアクションは処理しない */
         crm_trace("action %d (%s) was not runnable", action->id, action->uuid);
         return FALSE;
 
@@ -1087,10 +1098,11 @@ graph_element_from_action(action_t * action, pe_working_set_t * data_set)
     xmlNode *xml_action = NULL;
 
     if (should_dump_action(action) == FALSE) {
-		/* 処理済のアクションに関しては処理しない */
+		/* 対象アクションが処理済の場合は処理しない */
+		/* 実行しないアクションは処理しない */
         return;
     }
-
+	/* 処理済フラグをセットする */
     set_bit(action->flags, pe_action_dumped);
 
     syn = create_xml_node(data_set->graph, "synapse");
@@ -1119,6 +1131,7 @@ graph_element_from_action(action_t * action, pe_working_set_t * data_set)
         action_wrapper_t *wrapper = (action_wrapper_t *) lpc->data;
 
         if (should_dump_input(last_action, action, wrapper) == FALSE) {
+			/* 前に実行するアクションが処理不要ならセットしない */
             continue;
         }
 
