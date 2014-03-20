@@ -134,7 +134,7 @@ struct node_shared_s {
     gboolean expected_up;
     gboolean is_dc;
     int num_resources;
-    GListPtr running_rsc;       /* resource_t* */
+    GListPtr running_rsc;       /* resource_t* */	/* ノードで実行しているリソース情報のリスト */
     GListPtr allocated_rsc;     /* resource_t* */
 
     resource_t *remote_rsc;
@@ -233,15 +233,24 @@ struct resource_s {											/* 単一リソースの情報 */
     resource_object_functions_t *fns;						/* リソース種別毎の処理へのポインタ(resource_class_functions[])*/
     resource_alloc_functions_t *cmds;						/* リソース種別毎のコマンド処理へのポインタ(resource_class_alloc_functions[]) */
 
-    enum rsc_recovery_type recovery_type;
-    enum pe_restart restart_type;
+    enum rsc_recovery_type recovery_type;					/* リカバリタイプ */
+    														/* デフォルト:recovery_stop_start */
+    														/* リソースのmultiple-activeメタ情報で指定可能 */
+    														/*           stop_only,block */
+    enum pe_restart restart_type;							/* リスタートタイプ */
+    														/* デフォルト:recovery_stop_start */
+    														/* リソースのrestart-typeメタ情報で指定可能 */
+    														/*			 restart,ignore */
 
     int priority;
-    int stickiness;
+    int stickiness;											/* リソースの重み */
+    														/* デフォルトは、rsc_defaultsのresource-stickiness */
+    														/* リソースのresource-stickinessメタ情報で個別セット可能 */
+    														
     int sort_index;
     int failure_timeout;
     int effective_priority;
-    int migration_threshold;
+    int migration_threshold;								/* 故障閾値(故障数管理) */
 
     gboolean is_remote_node;
 
@@ -253,7 +262,7 @@ struct resource_s {											/* 単一リソースの情報 */
     GListPtr actions;           /* action_t*         */		/* peningeの処理で生成されたリソース単位の実行するべきアクション情報のリスト */
     GListPtr rsc_tickets;       /* rsc_ticket*       */
 
-    node_t *allocated_to;									/* リソースの配置先ノード情報 */
+    node_t *allocated_to;									/* 決定されたリソースの配置先ノード情報 */
     GListPtr running_on;        /* node_t*   */				/* リソースを実行中のノード情報のリスト */
     GHashTable *known_on;       /* node_t*   */
     GHashTable *allowed_nodes;  /* node_t*   */				/* リソースの配置候補ノード情報のリスト */

@@ -450,7 +450,7 @@ rsc_merge_weights(resource_t * rsc, const char *rhs, GHashTable * nodes, const c
     clear_bit(rsc->flags, pe_rsc_merging);
     return work;
 }
-
+/* native(primitive)リソースのcolor処理 */
 node_t *
 native_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
 {
@@ -461,14 +461,17 @@ native_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
         /* never allocate children on their own */
         pe_rsc_debug(rsc, "Escalating allocation of %s to its parent: %s", rsc->id,
                      rsc->parent->id);
+        /* 親リソースが未処理の場合は、親リソースのcolor(allocate)を先に実行する */
         rsc->parent->cmds->allocate(rsc->parent, prefer, data_set);
     }
 
     if (is_not_set(rsc->flags, pe_rsc_provisional)) {
+		/* 配置先ノードが決定している場合には、配置先ノード情報を返却 */
         return rsc->allocated_to;
     }
 
     if (is_set(rsc->flags, pe_rsc_allocating)) {
+		/* 処理中の場合は、再処理（ループされる処理を回避)しない */
         pe_rsc_debug(rsc, "Dependency loop detected involving %s", rsc->id);
         return NULL;
     }
@@ -510,7 +513,7 @@ native_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
 	/* 対象リソースがwith-rsc指定されているcolocation情報をすべて処理する */
     for (gIter = rsc->rsc_cons_lhs; gIter != NULL; gIter = gIter->next) {
         rsc_colocation_t *constraint = (rsc_colocation_t *) gIter->data;
-		/* 対象リソースの配置情報へrsc指定側の配置を反映する */
+		/* 対象リソースの配置情報へrsc指定側の配置情報を反映する */
         rsc->allowed_nodes =
             constraint->rsc_lh->cmds->merge_weights(constraint->rsc_lh, rsc->id, rsc->allowed_nodes,
                                                     constraint->node_attribute,

@@ -34,7 +34,8 @@ native_add_running(resource_t * rsc, node_t * node, pe_working_set_t * data_set)
     GListPtr gIter = rsc->running_on;
 
     CRM_CHECK(node != NULL, return);
-    for (; gIter != NULL; gIter = gIter->next) {
+	/* すでにリソースの実行中のノード情報リストに存在しているノードに関しては処理しない */
+	for (; gIter != NULL; gIter = gIter->next) {
         node_t *a_node = (node_t *) gIter->data;
 
         CRM_CHECK(a_node != NULL, return);
@@ -45,9 +46,10 @@ native_add_running(resource_t * rsc, node_t * node, pe_working_set_t * data_set)
 
     pe_rsc_trace(rsc, "Adding %s to %s %s", rsc->id, node->details->uname,
                  is_set(rsc->flags, pe_rsc_managed)?"":"(unmanaged)");
-
+	/* リソースの実行中のノード情報リスト(running_on)に対象ノード情報をセットする */
     rsc->running_on = g_list_append(rsc->running_on, node);
     if (rsc->variant == pe_native) {
+		/* native(primitive)リソースの場合は、対象ノードの実行リソース情報のリストにリソース情報を追加する */
         node->details->running_rsc = g_list_append(node->details->running_rsc, rsc);
     }
 
@@ -553,19 +555,19 @@ native_free(resource_t * rsc)
     pe_rsc_trace(rsc, "Freeing resource action list (not the data)");
     common_free(rsc);
 }
-
+/* リソースの現在ロール・遷移先のロールを取得する */
 enum rsc_role_e
 native_resource_state(const resource_t * rsc, gboolean current)
 {
     enum rsc_role_e role = rsc->next_role;
 
     if (current) {
-        role = rsc->role;
+        role = rsc->role;	/* current指定の場合は、現在のロールを返す */
     }
     pe_rsc_trace(rsc, "%s state: %s", rsc->id, role2text(role));
-    return role;
+    return role;	/* その他の場合は、次の遷移ロールを返す */
 }
-
+/* 実行中ノード情報、もしくは、配置先ノード情報からリソースの配置ノード情報を取得する */
 node_t *
 native_location(resource_t * rsc, GListPtr * list, gboolean current)
 {
@@ -573,6 +575,7 @@ native_location(resource_t * rsc, GListPtr * list, gboolean current)
     GListPtr result = NULL;
 
     if (rsc->children) {
+		/* 子リソースがある場合は、すべての子リソースのlocationのリストを取得する */
         GListPtr gIter = rsc->children;
 
         for (; gIter != NULL; gIter = gIter->next) {
@@ -582,28 +585,35 @@ native_location(resource_t * rsc, GListPtr * list, gboolean current)
         }
 
     } else if (current && rsc->running_on) {
+		/* current指定されていてリソースが実行されている場合 */
+		/* 実行ノード情報を結果リストにセットする */
         result = g_list_copy(rsc->running_on);
 
     } else if (current == FALSE && rsc->allocated_to) {
+		/* currnetが指定されていない場合で、配置先ノード情報がある場合 */
+		/* 配置先ノード情報を結果リストにセットする */
         result = g_list_append(NULL, rsc->allocated_to);
     }
 
     if (result && g_list_length(result) == 1) {
+		/* 結果リストが作成されて、１つのノード情報しか含まない場合は、先頭のノード情報を結果にセットする */
         one = g_list_nth_data(result, 0);
     }
 
     if (list) {
+		/* 積み上げリストが指定されている場合は、積み上げリストに結果リストの内容をセットする */
         GListPtr gIter = result;
 
         for (; gIter != NULL; gIter = gIter->next) {
             node_t *node = (node_t *) gIter->data;
 
             if (*list == NULL || pe_find_node_id(*list, node->details->id) == NULL) {
+				/* 積み上げリストが初期状態か、積み上げリストに存在しないノード情報なら積み上げリストに追加する */
                 *list = g_list_append(*list, node);
             }
         }
     }
 
     g_list_free(result);
-    return one;
+    return one;	/* 単一ノード情報が取れた場合は返す */
 }

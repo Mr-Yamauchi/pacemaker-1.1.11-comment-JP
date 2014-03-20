@@ -137,7 +137,7 @@ master_update_pseudo_status(resource_t * rsc, gboolean * demoting, gboolean * pr
         }
     }
 }
-
+/* location情報にrole:Masterのスコアがある場合は、対象子リソースのpriorityにそのスコアを加算する */
 #define apply_master_location(list) do {				\
     gIter2 = list;							\
     for(; gIter2 != NULL; gIter2 = gIter2->next) {			\
@@ -286,26 +286,32 @@ master_promotion_order(resource_t * rsc, pe_working_set_t * data_set)
     clone_data->merged_master_weights = TRUE;
     pe_rsc_trace(rsc, "Merging weights for %s", rsc->id);
     set_bit(rsc->flags, pe_rsc_merging);
-
+	/* 処理前の子リソースのsort_indexを出力する */
     gIter = rsc->children;
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *child = (resource_t *) gIter->data;
 
         pe_rsc_trace(rsc, "Sort index: %s = %d", child->id, child->sort_index);
     }
+    /* 処理前の配置候補ノード情報を出力 */
     dump_node_scores(LOG_DEBUG_3, rsc, "Before", rsc->allowed_nodes);
-
+	/* Master/Slaveリソースのすべての子リソースを処理する */
+	/* 
+	----
+	配置先ノードが決定している子リソースの配置候補ノード情報にも、sort_index値を加算しておく
+	----
+	*/
     gIter = rsc->children;
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *child = (resource_t *) gIter->data;
         char *score = NULL;
-
+		/* 子リソースの決定した配置先ノード(allocated_to)を取得する */
         chosen = child->fns->location(child, NULL, FALSE);
         if (chosen == NULL || child->sort_index < 0) {
-            pe_rsc_trace(rsc, "Skipping %s", child->id);
+            pe_rsc_trace(rsc, "Skipping %s", child->id);	/* 配置先が決定していない子リソースは処理しない */
             continue;
         }
-
+		/* 子リソースの配置先ノード情報で、子リソースの配置候補ノード情報のリストを検索する */
         node = (node_t *) pe_hash_table_lookup(rsc->allowed_nodes, chosen->details->id);
         CRM_ASSERT(node != NULL);
         /* adds in master preferences and rsc_location.role=Master */
@@ -315,7 +321,7 @@ master_promotion_order(resource_t * rsc, pe_working_set_t * data_set)
         free(score);
         node->weight = merge_weights(child->sort_index, node->weight);
     }
-
+    /* sort_index値が加算された配置候補ノード情報を出力 */
     dump_node_scores(LOG_DEBUG_3, rsc, "Middle", rsc->allowed_nodes);
 
     gIter = rsc->rsc_cons;
@@ -453,7 +459,7 @@ master_score(resource_t * rsc, node_t * node, int not_set_value)
     char *name = rsc->id;
     const char *attr_value = NULL;
     int score = not_set_value, len = 0;
-
+	/* 親リソースの処理 */
     if (rsc->children) {
         GListPtr gIter = rsc->children;
 
@@ -469,7 +475,7 @@ master_score(resource_t * rsc, node_t * node, int not_set_value)
         }
         return score;
     }
-
+	/* 子リソースの処理 */
     if (node == NULL) {
         if (rsc->fns->state(rsc, TRUE) < RSC_ROLE_STARTED) {
             pe_rsc_trace(rsc, "Ingoring master score for %s: unknown state", rsc->id);
@@ -537,17 +543,17 @@ apply_master_prefs(resource_t * rsc)
     get_clone_variant_data(clone_data, rsc);
 
     if (clone_data->applied_master_prefs) {
-        /* Make sure we only do this once */
+        /* Make sure we only do this once */	/* 処理済の場合は処理しない */
         return;
     }
 
-    clone_data->applied_master_prefs = TRUE;
-
+    clone_data->applied_master_prefs = TRUE;	/* 処理済フラグをセット */
+	/* Master/Slaveリソースのすべての子リソースを処理する */
     for (; gIter != NULL; gIter = gIter->next) {
         GHashTableIter iter;
         node_t *node = NULL;
         resource_t *child_rsc = (resource_t *) gIter->data;
-
+		/* 子リソースのすべての配置候補ノード情報リストを処理する */
         g_hash_table_iter_init(&iter, child_rsc->allowed_nodes);
         while (g_hash_table_iter_next(&iter, NULL, (void **)&node)) {
             if (can_run_resources(node) == FALSE) {
@@ -555,21 +561,24 @@ apply_master_prefs(resource_t * rsc)
                  *  so don't apply the master score as that may
                  *  lead to clone shuffling
                  */
-                continue;
+                continue;						/* 配置候補ノードでリソースが起動不可であれば処理しない */
             }
-
+			/* ノード情報の属性に設定されたmaster-XXXX値があればスコアに取得する */
             score = master_score(child_rsc, node, 0);
             if (score > 0) {
+				/* master-XXXX値があって、０以上であれば、配置候補ノードのweightに加算して新スコアを算出 */
                 new_score = merge_weights(node->weight, score);
                 if (new_score != node->weight) {
+					/* 配置候補ノードのweightが変わる場合は、配置候補ノードのweightを変更して情報を出力 */
                     pe_rsc_trace(rsc, "\t%s: Updating preference for %s (%d->%d)",
                                  child_rsc->id, node->details->uname, node->weight, new_score);
                     node->weight = new_score;
                 }
             }
-
+			/* 計算されたスコアと子リソースのpriorityで大きい方を採用する */
             new_score = max(child_rsc->priority, score);
             if (new_score != child_rsc->priority) {
+				/* 子リソースのpriorityが変わる場合は、変更して情報を出力 */
                 pe_rsc_trace(rsc, "\t%s: Updating priority (%d->%d)",
                              child_rsc->id, child_rsc->priority, new_score);
                 child_rsc->priority = new_score;
@@ -624,7 +633,7 @@ set_role_master(resource_t * rsc)
         set_role_master(child_rsc);
     }
 }
-
+/* Master/Slaveリソースのcolor */
 node_t *
 master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
 {
@@ -649,9 +658,14 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
         pe_rsc_debug(rsc, "Dependency loop detected involving %s", rsc->id);
         return NULL;
     }
-
+	/* 
+	 ---
+	 ノード情報の属性に設定されたmaster-XXXX値があればスコアがあれば、子リソースの配置候補ノードのweight、
+	 子リソースのpriorityに反映する
+	 ---
+	*/
     apply_master_prefs(rsc);
-
+	/* cloneのcolorを先に実行する */
     clone_color(rsc, prefer, data_set);
 
     set_bit(rsc->flags, pe_rsc_allocating);
@@ -659,14 +673,14 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
     /* count now tracks the number of masters allocated */
     g_hash_table_iter_init(&iter, rsc->allowed_nodes);
     while (g_hash_table_iter_next(&iter, NULL, (void **)&node)) {
-        node->count = 0;
+        node->count = 0;	/* Master/Slaveリソースの配置候補ノードのcountを０にリセット */
     }
 
     /*
      * assign priority
      */
     gIter = rsc->children;
-    for (; gIter != NULL; gIter = gIter->next) {
+    for (; gIter != NULL; gIter = gIter->next) {	/* Master/Slaveリソースのすべての子リソースを処理する */
         GListPtr list = NULL;
         resource_t *child_rsc = (resource_t *) gIter->data;
 
@@ -674,19 +688,22 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
                      role2text(child_rsc->next_role));
 
         if (child_rsc->fns->state(child_rsc, TRUE) == RSC_ROLE_STARTED) {
+			/* 現在の子リソースのロールがRSC_ROLE_STARTEDの場合は、現在の子リソースのロールをRSC_ROLE_SLAVEにセットする */
             set_role_slave(child_rsc, TRUE);
         }
-
+		/* 子リソースの配置先ノード情報リストを取得する */
         chosen = child_rsc->fns->location(child_rsc, &list, FALSE);
         if (g_list_length(list) > 1) {
+			/* 配置先ノード情報に複数のノード情報がある場合はエラー */
             crm_config_err("Cannot promote non-colocated child %s", child_rsc->id);
         }
 
         g_list_free(list);
         if (chosen == NULL) {
+			/* 配置先が決定してない子リソースは処理しない */
             continue;
         }
-
+		/* 子リソースの遷移先ロールを取り出す */
         next_role = child_rsc->fns->state(child_rsc, FALSE);
         switch (next_role) {
             case RSC_ROLE_STARTED:
@@ -705,6 +722,7 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
 
             case RSC_ROLE_SLAVE:
             case RSC_ROLE_STOPPED:
+            	/* 遷移先のロールがSLAVE,STOPPEDならMASTERに昇格する必要がないので、priorityに-INFINITYをセットする */
                 child_rsc->priority = -INFINITY;
                 break;
             case RSC_ROLE_MASTER:
@@ -715,21 +733,28 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
                 CRM_CHECK(FALSE /* unhandled */ ,
                           crm_err("Unknown resource role: %d for %s", next_role, child_rsc->id));
         }
-
+		/* 子リソースのlocation情報にrole:Masterのスコアがある場合は、子リソースのpriorityにそのスコアを加算する */
         apply_master_location(child_rsc->rsc_location);
+		/* 親リソースのlocation情報にrole:Masterのスコアがある場合は、子リソースのpriorityにそのスコアを加算する */
         apply_master_location(rsc->rsc_location);
-
+        /*
+         ------
+         この時点で子リソースのpriorityにはlocation制約のrole:Masterのスコアが加算されている
+         ------
+        */
+		/* 子リソースがwith-rsc指定されているcolocation情報のリストを処理する */
         gIter2 = child_rsc->rsc_cons;
         for (; gIter2 != NULL; gIter2 = gIter2->next) {
             rsc_colocation_t *cons = (rsc_colocation_t *) gIter2->data;
 
             child_rsc->cmds->rsc_colocation_lh(child_rsc, cons->rsc_rh, cons);
         }
-
+		/* sort_indexにpriorityをセットする */
         child_rsc->sort_index = child_rsc->priority;
         pe_rsc_trace(rsc, "Assigning priority for %s: %d", child_rsc->id, child_rsc->priority);
 
         if (next_role == RSC_ROLE_MASTER) {
+			/* 遷移先のロールがMASTERの場合は、sort_indexにINFINITYをセットする */
             child_rsc->sort_index = INFINITY;
         }
     }
@@ -738,7 +763,7 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
     master_promotion_order(rsc, data_set);
 
     /* mark the first N as masters */
-
+	/* マスターリソースを決定する */
     gIter = rsc->children;
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *child_rsc = (resource_t *) gIter->data;
