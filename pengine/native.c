@@ -116,6 +116,7 @@ have_enough_capacity(node_t * node, resource_t * rsc)
     return data.is_enough;
 }
 /* native(Primitve)な１つのリソースの配置先ノードを決定する */
+/* -- preferがセットされてくるのは、cloneからの処理時のみ */
 static gboolean
 native_choose_node(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
 {
@@ -136,7 +137,7 @@ native_choose_node(resource_t * rsc, node_t * prefer, pe_working_set_t * data_se
     gboolean result = FALSE;
 
     if (safe_str_neq(data_set->placement_strategy, "default")) {
-		/* 配置戦略が"default"の場合 */
+		/* 配置戦略が"default"以外の場合 */
         GListPtr gIter = NULL;
 
         for (gIter = data_set->nodes; gIter != NULL; gIter = gIter->next) {
@@ -152,7 +153,7 @@ native_choose_node(resource_t * rsc, node_t * prefer, pe_working_set_t * data_se
         }
         dump_node_scores(alloc_details, rsc, "Post-utilization", rsc->allowed_nodes);
     }
-
+	/* リソースの配置候補ノード情報の長さを取得 */
     length = g_hash_table_size(rsc->allowed_nodes);
 
     if (is_not_set(rsc->flags, pe_rsc_provisional)) {
@@ -180,17 +181,20 @@ native_choose_node(resource_t * rsc, node_t * prefer, pe_working_set_t * data_se
     }
 
     if (chosen == NULL && rsc->allowed_nodes) {
+		/* Clone以外(preferが未設定でchosen==NULLで、リソースの配置候補ノード情報がある場合 */
         nodes = g_hash_table_get_values(rsc->allowed_nodes);
         nodes = g_list_sort_with_data(nodes, sort_node_weight, g_list_nth_data(rsc->running_on, 0));
-
+		/* ソート済のノード情報の先頭を配置ノード候補とする */
         chosen = g_list_nth_data(nodes, 0);
         pe_rsc_trace(rsc, "Chose node %s for %s from %d candidates",
                      chosen ? chosen->details->uname : "<none>", rsc->id, length);
 
         if (chosen && chosen->weight > 0 && can_run_resources(chosen)) {
+			/* 配置候補ノードでリソースが起動可能な場合は、実行中ノード情報の先頭ノード情報を取り出す */
             node_t *running = g_list_nth_data(rsc->running_on, 0);
 
             if (running && can_run_resources(running) == FALSE) {
+				/* リソースが実行中で、その実行中のノードでリソースが起動出来ない場合 */
                 pe_rsc_trace(rsc, "Current node for %s (%s) can't run resources",
                              rsc->id, running->details->uname);
                 running = NULL;
@@ -479,7 +483,7 @@ native_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
     set_bit(rsc->flags, pe_rsc_allocating);
     print_resource(alloc_details, "Allocating: ", rsc, FALSE);
     dump_node_scores(alloc_details, rsc, "Pre-allloc", rsc->allowed_nodes);
-	/* 対象リソースがrsc指定されているcolocation情報をすべて処理する */
+	/* 対象リソースがwith-rsc指定しているcolocation情報をすべて処理する */
     for (gIter = rsc->rsc_cons; gIter != NULL; gIter = gIter->next) {
         rsc_colocation_t *constraint = (rsc_colocation_t *) gIter->data;
 
@@ -492,9 +496,10 @@ native_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
                      constraint->score, role2text(constraint->role_lh));
         if (constraint->role_lh >= RSC_ROLE_MASTER
             || (constraint->score < 0 && constraint->score > -INFINITY)) {
+			/* 
             archive = node_hash_dup(rsc->allowed_nodes);
         }
-        /* colocation情報のwith-rsc指定のリソースの配置を決定する */
+        /* このリソースがwith-rsc指定しているリソースの配置を先に決定する */
         rsc_rh->cmds->allocate(rsc_rh, NULL, data_set);
         /* colocation情報のwith-rsc指定のリソースの配置の配置情報を対象リソースに反映する */
         rsc->cmds->rsc_colocation_lh(rsc, rsc_rh, constraint);
@@ -536,6 +541,7 @@ native_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
     }
 
     if (is_not_set(rsc->flags, pe_rsc_managed)) {
+		/* リソースがアンマネージドの場合 */
         const char *reason = NULL;
         node_t *assign_to = NULL;
 
@@ -558,8 +564,9 @@ native_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
         native_assign_node(rsc, NULL, assign_to, TRUE);
 
     } else if (is_set(data_set->flags, pe_flag_stop_everything)) {
+		/* リソースフラグがpe_flag_stop_everythingの場合 */
         pe_rsc_debug(rsc, "Forcing %s to stop", rsc->id);
-		/* リソースの配置先ノードをセットする */
+		/* リソースの配置先ノードは無にセットし、遷移ロールをSTOPPEDに設定する */
         native_assign_node(rsc, NULL, NULL, TRUE);
 
     } else if (is_set(rsc->flags, pe_rsc_provisional)

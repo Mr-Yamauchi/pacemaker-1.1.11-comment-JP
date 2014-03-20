@@ -349,12 +349,14 @@ native_assign_node(resource_t * rsc, GListPtr nodes, node_t * chosen, gboolean f
     clear_bit(rsc->flags, pe_rsc_provisional);
 
     if (chosen == NULL) {
+		/* 決定したノードが無い場合は、リソースのstopアクションのoptionalフラグをクリア(runnnableならstopは実行可能) */
+		/* startアクションを実行不可にする */
         char *key = NULL;
         GListPtr gIter = NULL;
         GListPtr possible_matches = NULL;
 
         crm_debug("Could not allocate a node for %s", rsc->id);
-        rsc->next_role = RSC_ROLE_STOPPED;
+        rsc->next_role = RSC_ROLE_STOPPED;						/* 遷移先のロールをSTOPPPEDにする */
 
         key = generate_op_key(rsc->id, RSC_STOP, 0);
         possible_matches = find_actions(rsc->actions, key, NULL);

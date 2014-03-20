@@ -770,6 +770,10 @@ rsc_colocation_new(const char *id, const char *node_attr, int score,
 
     pe_rsc_trace(rsc_lh, "%s ==> %s (%s %d)", rsc_lh->id, rsc_rh->id, node_attr, score);
 	/* rsc指定側のリソースのrsc指定のcolocation情報にソート・追加する */
+	/* vip-rep with msPostgresql
+	   vip-rep->rsc_cons = (vip-rep with msPostgresql)
+	   msPostgresql->rsc_cons_lhs = (vip-rep with msPostgresql)
+	*/
     rsc_lh->rsc_cons = g_list_insert_sorted(rsc_lh->rsc_cons, new_con, sort_cons_priority_rh);
 	/* with-rsc指定側のリソースのwith-rsc指定のcolocation情報にソート・追加する */
     rsc_rh->rsc_cons_lhs =

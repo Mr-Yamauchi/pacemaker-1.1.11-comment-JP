@@ -244,7 +244,7 @@ sort_master_instance(gconstpointer a, gconstpointer b, gpointer data_set)
 
     role1 = resource1->fns->state(resource1, TRUE);
     role2 = resource2->fns->state(resource2, TRUE);
-
+	
     rc = sort_rsc_index(a, b);
     if (rc != 0) {
         crm_trace("%s %c %s (index)", resource1->id, rc < 0 ? '<' : '>', resource2->id);
@@ -293,7 +293,7 @@ master_promotion_order(resource_t * rsc, pe_working_set_t * data_set)
 
         pe_rsc_trace(rsc, "Sort index: %s = %d", child->id, child->sort_index);
     }
-    /* 処理前の配置候補ノード情報を出力 */
+    /* 処理前の親リソースの配置候補ノード情報を出力 */
     dump_node_scores(LOG_DEBUG_3, rsc, "Before", rsc->allowed_nodes);
 	/* Master/Slaveリソースのすべての子リソースを処理する */
 	/* 
@@ -311,7 +311,7 @@ master_promotion_order(resource_t * rsc, pe_working_set_t * data_set)
             pe_rsc_trace(rsc, "Skipping %s", child->id);	/* 配置先が決定していない子リソースは処理しない */
             continue;
         }
-		/* 子リソースの配置先ノード情報で、子リソースの配置候補ノード情報のリストを検索する */
+		/* 子リソースの配置先ノード情報で、親リソースの配置候補ノード情報のリストを検索する */
         node = (node_t *) pe_hash_table_lookup(rsc->allowed_nodes, chosen->details->id);
         CRM_ASSERT(node != NULL);
         /* adds in master preferences and rsc_location.role=Master */
@@ -319,11 +319,12 @@ master_promotion_order(resource_t * rsc, pe_working_set_t * data_set)
         pe_rsc_trace(rsc, "Adding %s to %s from %s", score,
                      node->details->uname, child->id);
         free(score);
+        /* 親リソースの配置候補ノードのweightにsrot_indexを加算 */
         node->weight = merge_weights(child->sort_index, node->weight);
     }
-    /* sort_index値が加算された配置候補ノード情報を出力 */
+    /* sort_index値が加算された親リソースの配置候補ノード情報を出力 */
     dump_node_scores(LOG_DEBUG_3, rsc, "Middle", rsc->allowed_nodes);
-
+	/* このリソースがrsc指定しているcolocation情報を処理する */
     gIter = rsc->rsc_cons;
     for (; gIter != NULL; gIter = gIter->next) {
         rsc_colocation_t *constraint = (rsc_colocation_t *) gIter->data;
@@ -332,10 +333,12 @@ master_promotion_order(resource_t * rsc, pe_working_set_t * data_set)
          * master instance should/must be colocated with
          */
         if (constraint->role_lh == RSC_ROLE_MASTER) {
+			/* colocation情報のwith-roleがMASTERの場合 */
             enum pe_weights flags = constraint->score == INFINITY ? 0 : pe_weights_rollback;
 
             pe_rsc_trace(rsc, "RHS: %s with %s: %d", constraint->rsc_lh->id, constraint->rsc_rh->id,
                          constraint->score);
+            /* このリソースの配置候補ノード情報をwith-rsc指定側の配置情報で更新する */
             rsc->allowed_nodes =
                 constraint->rsc_rh->cmds->merge_weights(constraint->rsc_rh, rsc->id,
                                                         rsc->allowed_nodes,
@@ -343,7 +346,7 @@ master_promotion_order(resource_t * rsc, pe_working_set_t * data_set)
                                                         (float)constraint->score / INFINITY, flags);
         }
     }
-
+	/* このリソースをwith-rsc指定しているcolocation情報を処理する */
     gIter = rsc->rsc_cons_lhs;
     for (; gIter != NULL; gIter = gIter->next) {
         rsc_colocation_t *constraint = (rsc_colocation_t *) gIter->data;
@@ -352,8 +355,10 @@ master_promotion_order(resource_t * rsc, pe_working_set_t * data_set)
          * colocated with the master instance
          */
         if (constraint->role_rh == RSC_ROLE_MASTER) {
+			/* colocation情報のwith-roleがMASTERの場合 */
             pe_rsc_trace(rsc, "LHS: %s with %s: %d", constraint->rsc_lh->id, constraint->rsc_rh->id,
                          constraint->score);
+            /* このリソースの配置候補ノード情報をrsc指定側の配置情報で更新する */
             rsc->allowed_nodes =
                 constraint->rsc_lh->cmds->merge_weights(constraint->rsc_lh, rsc->id,
                                                         rsc->allowed_nodes,
@@ -397,7 +402,7 @@ master_promotion_order(resource_t * rsc, pe_working_set_t * data_set)
         }
         pe_rsc_trace(rsc, "Set sort index: %s = %d", child->id, child->sort_index);
     }
-
+	/* 子リソースの情報リストをsort_indexでソートする */
     rsc->children = g_list_sort_with_data(rsc->children, sort_master_instance, data_set);
     clear_bit(rsc->flags, pe_rsc_merging);
 }
@@ -764,6 +769,7 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
 
     /* mark the first N as masters */
 	/* マスターリソースを決定する */
+	/* 子リソースの情報は、sort_indexでソートされている */
     gIter = rsc->children;
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *child_rsc = (resource_t *) gIter->data;

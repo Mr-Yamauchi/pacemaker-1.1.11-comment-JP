@@ -294,7 +294,7 @@ dump_rsc_utilization(int level, const char *comment, resource_t * rsc, node_t * 
 
     free(dump_text);
 }
-
+/* ƒŠƒ\[ƒXî•ñ‚Ìsort_index‚ğ”äŠr‚·‚é */
 gint
 sort_rsc_index(gconstpointer a, gconstpointer b)
 {

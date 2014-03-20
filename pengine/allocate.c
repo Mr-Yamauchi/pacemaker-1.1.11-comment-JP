@@ -533,7 +533,7 @@ check_actions(pe_working_set_t * data_set)
         }
     }
 }
-
+/* location制約を適用する */
 static gboolean
 apply_placement_constraints(pe_working_set_t * data_set)
 {
@@ -566,7 +566,7 @@ failcount_clear_action_exists(node_t * node, resource_t * rsc)
 
     return rc;
 }
-
+/* 起動済のリソースに対して、resouce_stickiness(重み)を適用する */
 static void
 common_apply_stickiness(resource_t * rsc, node_t * node, pe_working_set_t * data_set)
 {
@@ -767,7 +767,7 @@ apply_system_health(pe_working_set_t * data_set)
 
     return TRUE;
 }
-
+/* CIB情報の展開処理 */
 gboolean
 stage0(pe_working_set_t * data_set)
 {
@@ -958,13 +958,14 @@ probe_resources(pe_working_set_t * data_set)
  *
  * Apply node constraints (ie. filter the "allowed_nodes" part of resources
  */
+/* location制約の適用と、起動済リソースへのresource_stickinessの適用 */
 gboolean
 stage2(pe_working_set_t * data_set)
 {
     GListPtr gIter = NULL;
 
     crm_trace("Applying placement constraints");
-
+	/* ノード数をカウントしておく */
     gIter = data_set->nodes;
     for (; gIter != NULL; gIter = gIter->next) {
         node_t *node = (node_t *) gIter->data;
@@ -974,10 +975,11 @@ stage2(pe_working_set_t * data_set)
 
         } else if (node->weight >= 0.0  /* global weight */
                    && node->details->online && node->details->type != node_ping) {
+			/* オンラインなノード数をカウントする */
             data_set->max_valid_nodes++;
         }
     }
-
+	/* location制約を適用する */
     apply_placement_constraints(data_set);
 
     gIter = data_set->nodes;
@@ -988,7 +990,7 @@ stage2(pe_working_set_t * data_set)
         gIter2 = data_set->resources;
         for (; gIter2 != NULL; gIter2 = gIter2->next) {
             resource_t *rsc = (resource_t *) gIter2->data;
-
+			/* 起動済のリソースに対して、resouce_stickiness(重み)を適用する */
             common_apply_stickiness(rsc, node, data_set);
         }
     }
@@ -1194,13 +1196,14 @@ allocate_resources(pe_working_set_t * data_set)
         rsc->cmds->allocate(rsc, NULL, data_set);
     }
 }
-
+/* リソースの配置先の決定、Probeの生成、リソースのアクションの生成 */
 gboolean
 stage5(pe_working_set_t * data_set)
 {
     GListPtr gIter = NULL;
 
     if (safe_str_neq(data_set->placement_strategy, "default")) {
+		/* リソース配置戦略が"default"の場合(初期値)、リソースのソートを行う */
         GListPtr nodes = g_list_copy(data_set->nodes);
 
         nodes = g_list_sort_with_data(nodes, sort_node_weight, NULL);
@@ -1220,7 +1223,7 @@ stage5(pe_working_set_t * data_set)
 
     crm_trace("Allocating services");
     /* Take (next) highest resource, assign it and create its actions */
-	/* リソースの配置先を決定する */
+	/* 全リソースの配置先を決定する */
     allocate_resources(data_set);
 
     gIter = data_set->nodes;
@@ -1337,6 +1340,7 @@ pe_fence_op(node_t * node, const char *op, pe_working_set_t * data_set)
 /*
  * Create dependancies for stonith and shutdown operations
  */
+/* STONITHアクションの適用とSHUTDOWN処理 */
 gboolean
 stage6(pe_working_set_t * data_set)
 {

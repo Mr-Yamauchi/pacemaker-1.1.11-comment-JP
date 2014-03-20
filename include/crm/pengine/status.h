@@ -256,8 +256,8 @@ struct resource_s {											/* 単一リソースの情報 */
 
     unsigned long long flags;
 
-    GListPtr rsc_cons_lhs;      /* rsc_colocation_t* */		/* このリソースがrsc指定されているcolocation情報のリスト */
-    GListPtr rsc_cons;          /* rsc_colocation_t* */		/* このリソースがwith-rsc指定されているcolocation情報のリスト */
+    GListPtr rsc_cons_lhs;      /* rsc_colocation_t* */		/* このリソースがwith-rsc指定されているcolocation情報のリスト */
+    GListPtr rsc_cons;          /* rsc_colocation_t* */		/* このリソースがwith-rsc指定しているcolocation情報のリスト */
     GListPtr rsc_location;      /* rsc_to_node_t*    */		/* このリソースのlocation情報のリスト */
     GListPtr actions;           /* action_t*         */		/* peningeの処理で生成されたリソース単位の実行するべきアクション情報のリスト */
     GListPtr rsc_tickets;       /* rsc_ticket*       */

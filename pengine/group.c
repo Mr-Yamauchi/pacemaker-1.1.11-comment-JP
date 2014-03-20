@@ -26,7 +26,7 @@
 
 #define VARIANT_GROUP 1
 #include <lib/pengine/variant.h>
-
+/* group‚Ìcolorˆ— */
 node_t *
 group_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
 {
