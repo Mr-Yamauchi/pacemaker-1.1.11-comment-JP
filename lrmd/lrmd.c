@@ -764,6 +764,7 @@ lrmd_rsc_execute_stonith(lrmd_rsc_t * rsc, lrmd_cmd_t * cmd)
          * but to avoid a possible race condition between stonith receiving the IPC update
          * and the lrmd requesting that resource, the lrmd still registers the device as well.
          * Stonith knows how to handle duplicate device registrations correctly. */
+        /* STONITH‚ÉSTONITHƒfƒoƒCƒX‚ð“o˜^‚·‚é */
         rc = stonith_api->cmds->register_device(stonith_api,
                                                 st_opt_sync_call,
                                                 cmd->rsc_id,

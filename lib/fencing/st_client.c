@@ -212,7 +212,7 @@ stonith_api_register_device(stonith_t * st, int call_options,
     xmlNode *data = NULL;
 
     data = create_device_registration_xml(id, namespace, agent, params);
-
+	/* STONITHデバイスの登録 */
     rc = stonith_send_command(st, STONITH_OP_DEVICE_ADD, data, NULL, call_options, 0);
     free_xml(data);
 

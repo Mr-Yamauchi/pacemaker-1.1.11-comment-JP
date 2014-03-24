@@ -573,7 +573,7 @@ get_on_target_actions(xmlNode * xml)
 
     return actions;
 }
-
+/* STONITHデバイスの登録メッセージを元にして、STONITHデバイスの登録データを生成する */
 static stonith_device_t *
 build_device_from_xml(xmlNode * msg)
 {
@@ -607,7 +607,7 @@ build_device_from_xml(xmlNode * msg)
         crm_info("The fencing device '%s' requires actions (%s) to be executed on the target node",
                  device->id, device->on_target_actions);
     }
-
+	/* 実行トリガーのセット */
     device->work = mainloop_add_trigger(G_PRIORITY_HIGH, stonith_device_dispatch, device);
     /* TODO: Hook up priority */
 
@@ -769,6 +769,7 @@ dynamic_list_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
  * \internal
  * \brief Checks to see if an identical device already exists in the device_list
  */
+/* device_listリストに登録済のデバイスかどうかをチェックする */
 static stonith_device_t *
 device_has_duplicate(stonith_device_t * device)
 {
@@ -807,13 +808,13 @@ device_has_duplicate(stonith_device_t * device)
     crm_trace("Match");
     return dup;
 }
-
+/* STONITHデバイス(device_listリストへ)の登録 */
 int
 stonith_device_register(xmlNode * msg, const char **desc, gboolean from_cib)
 {
     stonith_device_t *dup = NULL;
-    stonith_device_t *device = build_device_from_xml(msg);
-
+    stonith_device_t *device = build_device_from_xml(msg);	/* STONITHデバイスの登録メッセージを元にして、STONITHデバイスの登録データを生成する */
+	/* device_listリストに登録済のデバイスかどうかをチェックする */
     dup = device_has_duplicate(device);
     if (dup) {
         crm_notice("Device '%s' already existed in device list (%d active devices)", device->id,
@@ -837,6 +838,7 @@ stonith_device_register(xmlNode * msg, const char **desc, gboolean from_cib)
                 mainloop_set_trigger(device->work);
             }
         }
+        /* device_listに登録する */
         g_hash_table_replace(device_list, device->id, device);
 
         crm_notice("Added '%s' to the device list (%d active devices)", device->id,
@@ -1147,7 +1149,7 @@ get_capable_devices(const char *host, const char *action, int timeout, void *use
     GHashTableIter gIter;
     stonith_device_t *device = NULL;
 
-    if (!g_hash_table_size(device_list)) {
+    if (!g_hash_table_size(device_list)) {	/* device_listに存在しない場合 */
         callback(NULL, user_data);
         return;
     }
@@ -1271,7 +1273,7 @@ stonith_query_capable_device_cb(GList * devices, void *user_data)
     free_xml(list);
     g_list_free_full(devices, free);
 }
-
+/* QUERY処理 */
 static void
 stonith_query(xmlNode * msg, const char *remote_peer, const char *client_id, int call_options)
 {
@@ -1279,20 +1281,20 @@ stonith_query(xmlNode * msg, const char *remote_peer, const char *client_id, int
     const char *action = NULL;
     const char *target = NULL;
     int timeout = 0;
-    xmlNode *dev = get_xpath_object("//@" F_STONITH_ACTION, msg, LOG_DEBUG_3);
+    xmlNode *dev = get_xpath_object("//@" F_STONITH_ACTION, msg, LOG_DEBUG_3);	/* F_STONITH_ACTIONのXMLノードを取得 */
 
-    crm_element_value_int(msg, F_STONITH_TIMEOUT, &timeout);
+    crm_element_value_int(msg, F_STONITH_TIMEOUT, &timeout);					/* F_STONITH_TIMEOUTを取得 */
     if (dev) {
-        const char *device = crm_element_value(dev, F_STONITH_DEVICE);
+        const char *device = crm_element_value(dev, F_STONITH_DEVICE);			/* 取得したF_STONITH_ACTIONのXMLノードからF_STONITH_DEVICEを取得 */
 
-        target = crm_element_value(dev, F_STONITH_TARGET);
-        action = crm_element_value(dev, F_STONITH_ACTION);
+        target = crm_element_value(dev, F_STONITH_TARGET);						/* 取得したF_STONITH_ACTIONのXMLノードからF_STONITH_TARGETを取得 */
+        action = crm_element_value(dev, F_STONITH_ACTION);						/* 取得したF_STONITH_ACTIONのXMLノードからF_STONITH_TARGETを取得 */
         if (device && safe_str_eq(device, "manual_ack")) {
             /* No query or reply necessary */
             return;
         }
     }
-
+	/* QUERYデータを生成 */
     crm_log_xml_debug(msg, "Query");
     query = calloc(1, sizeof(struct st_query_data));
 
@@ -1762,7 +1764,7 @@ stonith_send_reply(xmlNode * reply, int call_options, const char *remote_peer,
         do_local_reply(reply, client_id, is_set(call_options, st_opt_sync_call), remote_peer != NULL);
     }
 }
-
+/* 要求メッセージ処理 */
 static int
 handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * request,
                const char *remote_peer)
@@ -1807,9 +1809,11 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
         return 0;
 
     } else if (crm_str_eq(op, STONITH_OP_QUERY, TRUE)) {
+		/* STONITH_OP_QUERYメッセージの場合 */
         if (remote_peer) {
             create_remote_stonith_op(client_id, request, TRUE); /* Record it for the future notification */
         }
+        /* QUERY処理 */
         stonith_query(request, remote_peer, client_id, call_options);
         return 0;
 
@@ -1916,9 +1920,10 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
         rc = stonith_fence_history(request, &data);
 
     } else if (crm_str_eq(op, STONITH_OP_DEVICE_ADD, TRUE)) {
+		/* STONITHデバイスの登録(STONITH_OP_DEVICE_ADD)メッセージの場合 */
         const char *id = NULL;
         xmlNode *notify_data = create_xml_node(NULL, op);
-
+		/* STONITHデバイス(device_listリストへ)の登録 */
         rc = stonith_device_register(request, &id, FALSE);
 
         crm_xml_add(notify_data, F_STONITH_DEVICE, id);
@@ -2003,17 +2008,20 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
 
     return rc;
 }
-
+/* 応答メッセージ処理 */
 static void
 handle_reply(crm_client_t * client, xmlNode * request, const char *remote_peer)
 {
     const char *op = crm_element_value(request, F_STONITH_OPERATION);
 
     if (crm_str_eq(op, STONITH_OP_QUERY, TRUE)) {
+		/* STONITH_OP_QUERYメッセージ */
         process_remote_stonith_query(request);
     } else if (crm_str_eq(op, T_STONITH_NOTIFY, TRUE)) {
+		/* T_STONITH_NOTIFYメッセージ */
         process_remote_stonith_exec(request);
     } else if (crm_str_eq(op, STONITH_OP_FENCE, TRUE)) {
+		/* STONITH_OP_FENCEメッセージ */
         /* Reply to a complex fencing op */
         process_remote_stonith_exec(request);
     } else {
@@ -2053,8 +2061,10 @@ stonith_command(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * re
     }
 
     if (is_reply) {
+		/* 応答メッセージの場合 */
         handle_reply(client, request, remote_peer);
     } else {
+		/* 要求メッセージの場合 */
         rc = handle_request(client, id, flags, request, remote_peer);
     }
 

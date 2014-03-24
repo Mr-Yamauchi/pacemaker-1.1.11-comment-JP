@@ -1,4 +1,4 @@
-/*
+ｔ/*
  * Copyright (C) 2009 Andrew Beekhof <andrew@beekhof.net>
  *
  * This program is free software; you can redistribute it and/or
@@ -160,7 +160,7 @@ st_ipc_destroy(qb_ipcs_connection_t * c)
     crm_trace("Connection %p destroyed", c);
     st_ipc_closed(c);
 }
-
+/* STONITH IPC通信コールバック */
 static void
 stonith_peer_callback(xmlNode * msg, void *private_data)
 {
@@ -172,6 +172,7 @@ stonith_peer_callback(xmlNode * msg, void *private_data)
     }
 
     crm_log_xml_trace(msg, "Peer[inbound]");
+    /* コマンド処理 */
     stonith_command(NULL, 0, 0, msg, remote_peer);
 }
 
@@ -589,7 +590,7 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
     const char *value = NULL;
     const char *rclass = NULL;
     node_t *parent = NULL;
-
+	/* 子リソースがある場合は、すべての子リソースを処理する */
     if(rsc->children) {
         GListPtr gIter = NULL;
         for (gIter = rsc->children; gIter != NULL; gIter = gIter->next) {
@@ -608,7 +609,7 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
 
     rclass = crm_element_value(rsc->xml, XML_AGENT_ATTR_CLASS);
     if(safe_str_neq(rclass, "stonith")) {
-        return;
+        return;				/* STONITHリソース以外は処理しない */
     }
 
     value = g_hash_table_lookup(rsc->meta, XML_RSC_ATTR_TARGET_ROLE);
@@ -618,10 +619,11 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
 
     } else if(stonith_our_uname) {
         GHashTableIter iter;
-
+		/* 対象STONITHリソースの配置候補ノード情報を処理する */
         g_hash_table_iter_init(&iter, rsc->allowed_nodes);
         while (g_hash_table_iter_next(&iter, NULL, (void **)&node)) {
             if(node && strcmp(node->details->uname, stonith_our_uname) == 0) {
+				/* 配置候補ノード情報が自ノードであればbreak */
                 break;
             }
             node = NULL;
@@ -679,7 +681,7 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
             params = stonith_key_value_add(params, name, value);
             crm_trace(" %s=%s", name, value);
         }
-
+		/* cibのstonith情報からSTONITHリソースをdevice_listへ登録する */
         data = create_device_registration_xml(rsc_name(rsc), provider, agent, params);
         stonith_device_register(data, NULL, TRUE);
 
@@ -786,7 +788,7 @@ update_cib_stonith_devices(const char *event, xmlNode * msg)
             standard = crm_element_value(match, XML_AGENT_ATTR_CLASS);
 
             if (safe_str_neq(standard, "stonith")) {
-                continue;
+                continue;		/* STONITHリソース以外は無視 */
             }
 
             crm_trace("Fencing resource %s was added or modified", rsc_id);
@@ -872,7 +874,7 @@ update_cib_cache_cb(const char *event, xmlNode * msg)
         }
         CRM_ASSERT(local_cib != NULL);
     }
-
+	/* cibの更新データを元して、stonith情報を更新する */
     update_fencing_topology(event, msg);
     update_cib_stonith_devices(event, msg);
 }
@@ -970,7 +972,7 @@ setup_cib(void)
 
     if (rc != pcmk_ok) {
         crm_err("Could not connect to the CIB service: %s (%d)", pcmk_strerror(rc), rc);
-
+    /* CIBの更新コールバックのセット */
     } else if (pcmk_ok !=
                cib_api->cmds->add_notify_callback(cib_api, T_CIB_DIFF_NOTIFY, update_cib_cache_cb)) {
         crm_err("Could not set CIB notification callback");
@@ -1183,8 +1185,8 @@ main(int argc, char **argv)
             crm_crit("Cannot sign in to the cluster... terminating");
             crm_exit(DAEMON_RESPAWN_STOP);
         }
-        stonith_our_uname = cluster.uname;
-        stonith_our_uuid = cluster.uuid;
+        stonith_our_uname = cluster.uname;		/* stonith_our_unameに自unameをセット */
+        stonith_our_uuid = cluster.uuid;		/* stonith_our_unameに自uuidをセット */
 
         if (no_cib_connect == FALSE) {
             setup_cib();
@@ -1195,7 +1197,7 @@ main(int argc, char **argv)
     }
 
     crm_set_status_callback(&st_peer_update_callback);
-
+	/* デバイスリストの生成 */
     device_list = g_hash_table_new_full(crm_str_hash, g_str_equal, NULL, free_device);
 
     topology = g_hash_table_new_full(crm_str_hash, g_str_equal, NULL, free_topology_entry);
