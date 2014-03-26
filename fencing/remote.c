@@ -421,12 +421,14 @@ stonith_topology_next(remote_fencing_op_t * op)
         tp = g_hash_table_lookup(topology, op->target);
     }
     if (topology_is_empty(tp)) {
+		/* topologyが空になった場合 */
         return pcmk_ok;
     }
 
     set_bit(op->call_options, st_opt_topology);
 
     do {
+		/* 実行するtopologyのlevelをインクリメントする */
         op->level++;
 
     } while (op->level < ST_LEVEL_MAX && tp->levels[op->level] == NULL);
@@ -561,6 +563,7 @@ create_remote_stonith_op(const char *client, xmlNode * request, gboolean peer)
     int call_options = 0;
 
     if (remote_op_list == NULL) {
+		/* stonithの実行リストを生成する */
         remote_op_list = g_hash_table_new_full(crm_str_hash, g_str_equal, NULL, free_remote_op);
     }
 
@@ -587,7 +590,7 @@ create_remote_stonith_op(const char *client, xmlNode * request, gboolean peer)
     } else {
         op->id = crm_generate_uuid();
     }
-
+	/* stonithの実行リストに追加する */
     g_hash_table_replace(remote_op_list, op->id, op);
     CRM_LOG_ASSERT(g_hash_table_lookup(remote_op_list, op->id) != NULL);
     crm_trace("Created %s", op->id);
@@ -642,7 +645,7 @@ create_remote_stonith_op(const char *client, xmlNode * request, gboolean peer)
 
     return op;
 }
-
+/* REMOTE STONITH処理 */
 remote_fencing_op_t *
 initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean manual_ack)
 {
@@ -676,6 +679,7 @@ initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean ma
         case st_failed:
             crm_warn("Initiation of remote operation %s for %s: failed (%s)", op->action,
                      op->target, op->id);
+            /* STONITH失敗 終了処理 */
             remote_op_done(op, NULL, -EINVAL, FALSE);
             return op;
 
@@ -688,7 +692,7 @@ initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean ma
             crm_notice("Initiating remote operation %s for %s: %s (%d)", op->action, op->target,
                        op->id, op->state);
     }
-
+	/* QUERY(STONITH_OP_QUERY)メッセージを作成する */
     query = stonith_create_op(op->client_callid, op->id, STONITH_OP_QUERY, NULL, 0);
 
     crm_xml_add(query, F_STONITH_REMOTE_OP_ID, op->id);
@@ -698,10 +702,10 @@ initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean ma
     crm_xml_add(query, F_STONITH_CLIENTID, op->client_id);
     crm_xml_add(query, F_STONITH_CLIENTNAME, op->client_name);
     crm_xml_add_int(query, F_STONITH_TIMEOUT, op->base_timeout);
-
+	/* STONITHを実行するノードを決定する為に、QUERY(STONITH_OP_QUERY)メッセージを送信 */
     send_cluster_message(NULL, crm_msg_stonith_ng, query, FALSE);
     free_xml(query);
-
+	/* タイムアウトをセット */
     query_timeout = op->base_timeout * TIMEOUT_MULTIPLY_FACTOR;
     op->query_timer = g_timeout_add((1000 * query_timeout), remote_op_query_timeout, op);
 
@@ -1006,7 +1010,7 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
             g_source_remove(op->op_timer_one);
         }
         op->op_timer_one = g_timeout_add((1000 * timeout_one), remote_op_timeout_one, op);
-
+		/* 実行先ノードにSTONITHを依頼(STONITH_OP_FENCE) */
         send_cluster_message(crm_get_peer(0, peer->host), crm_msg_stonith_ng, query, FALSE);
         peer->tried = TRUE;
         free_xml(query);
@@ -1108,7 +1112,7 @@ all_topology_devices_found(remote_fencing_op_t * op)
 
     return TRUE;
 }
-
+/* QUERY応答受信処理 */
 int
 process_remote_stonith_query(xmlNode * msg)
 {
@@ -1133,6 +1137,7 @@ process_remote_stonith_query(xmlNode * msg)
 
     op = g_hash_table_lookup(remote_op_list, id);
     if (op == NULL) {
+		/* このノードのstonithの実行リストにないQUERY応答の場合は処理しない */
         crm_debug("Unknown or expired remote op: %s", id);
         return -EOPNOTSUPP;
     }

@@ -168,6 +168,7 @@ stonith_peer_callback(xmlNode * msg, void *private_data)
     const char *op = crm_element_value(msg, F_STONITH_OPERATION);
 
     if (crm_str_eq(op, "poke", TRUE)) {
+		/* pokeメッセージは処理しない */
         return;
     }
 
@@ -504,12 +505,12 @@ remove_fencing_topology(xmlXPathObjectPtr xpathObj)
         }
     }
 }
-
+/* fencing_topologyを登録する */
 static void
 register_fencing_topology(xmlXPathObjectPtr xpathObj, gboolean force)
 {
     int max = numXpathResults(xpathObj), lpc = 0;
-
+	/* fencing_topology内のすべてのfencing-levelを処理する */
     for (lpc = 0; lpc < max; lpc++) {
         int index = 0;
         const char *target;
@@ -518,7 +519,7 @@ register_fencing_topology(xmlXPathObjectPtr xpathObj, gboolean force)
         xmlNode *match = getXpathResult(xpathObj, lpc);
 
         CRM_CHECK(match != NULL, continue);
-
+		/* index, target, devicesを取り出す */
         crm_element_value_int(match, XML_ATTR_STONITH_INDEX, &index);
         target = crm_element_value(match, XML_ATTR_STONITH_TARGET);
         dev_list = crm_element_value(match, XML_ATTR_STONITH_DEVICES);
@@ -583,7 +584,8 @@ fencing_topology_init(xmlNode * msg)
 
 #define rsc_name(x) x->clone_name?x->clone_name:x->id
 static bool have_fence_scsi = FALSE;
-
+/* 対象リソース情報(cib情報)からデバイスリストを更新する */
+/* 自ノードに配置出来ないSTONITHリソースは登録しない */
 static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
 {
     node_t *node = NULL;
@@ -611,9 +613,10 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
     if(safe_str_neq(rclass, "stonith")) {
         return;				/* STONITHリソース以外は処理しない */
     }
-
+	
     value = g_hash_table_lookup(rsc->meta, XML_RSC_ATTR_TARGET_ROLE);
     if(value && strcmp(RSC_STOPPED, value) == 0) {
+		/* target_rolwがSTOPPEDの場合はほ処理しない */
         crm_info("Device %s has been disabled", rsc->id);
         return;
 
@@ -629,13 +632,14 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
             node = NULL;
         }
     }
-
+	/* 対象STONITHリソースがgroupリソースに含まれる場合 */
     if (rsc->parent && rsc->parent->variant == pe_group) {
         GHashTableIter iter;
-
+		/* 親 group-STONITHリソースの配置候補ノード情報を処理する */
         g_hash_table_iter_init(&iter, rsc->parent->allowed_nodes);
         while (g_hash_table_iter_next(&iter, NULL, (void **)&parent)) {
             if(parent && strcmp(parent->details->uname, stonith_our_uname) == 0) {
+				/* 配置候補ノード情報が自ノードであればbreak */
                 break;
             }
             parent = NULL;
@@ -644,7 +648,7 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
 
     if(node == NULL) {
         GHashTableIter iter;
-
+		/* 対象STONITHリソースが自ノードに配置出来ない場合は、デバイスリストに登録しない */
         crm_info("Device %s has been disabled on %s: unknown", rsc->id, stonith_our_uname);
         g_hash_table_iter_init(&iter, rsc->allowed_nodes);
         while (g_hash_table_iter_next(&iter, NULL, (void **)&node)) {
@@ -654,6 +658,7 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
         return;
 
     } else if(node->weight < 0 || (parent && parent->weight < 0)) {
+		/* 対象STONITHリソースが自ノードに配置出来ない場合(SCOREが0以下)は、デバイスリストに登録しない */
         char *score = score2char((node->weight < 0) ? node->weight : parent->weight);
 
         crm_info("Device %s has been disabled on %s: score=%s", rsc->id, stonith_our_uname, score);
@@ -681,8 +686,9 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
             params = stonith_key_value_add(params, name, value);
             crm_trace(" %s=%s", name, value);
         }
-		/* cibのstonith情報からSTONITHリソースをdevice_listへ登録する */
+		/* cibのstonith情報からSTONITHリソースをdevice_listへ登録データを生成する */
         data = create_device_registration_xml(rsc_name(rsc), provider, agent, params);
+        /* デバイスリストに登録する */
         stonith_device_register(data, NULL, TRUE);
 
         /* If required, unfence ourselves on cluster startup
@@ -690,6 +696,7 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
          * Make this generic/smarter if/when more than a single agent needs this
          */
         if(have_fence_scsi == FALSE && safe_str_eq(agent, "fence_scsi")) {
+			/* fence_scsiエージェントの場合 */
             stonith_device_t *device = g_hash_table_lookup(device_list, rsc->id);
 
             if(stonith_our_uname == NULL) {
@@ -720,7 +727,8 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
 
 extern xmlNode *do_calculations(pe_working_set_t * data_set, xmlNode * xml_input, crm_time_t * now);
 extern node_t *create_node(const char *id, const char *uname, const char *type, const char *score, pe_working_set_t * data_set);
-
+/* デバイスリストの更新 */
+/* 自ノードに配置出来ないSTONITHリソースは登録しない */
 static void
 cib_devices_update(void)
 {
@@ -728,19 +736,19 @@ cib_devices_update(void)
     pe_working_set_t data_set;
 
     set_working_set_defaults(&data_set);
-    data_set.input = local_cib;
+    data_set.input = local_cib;						/* 対象cib情報をローカルのcib情報でセット */
     data_set.now = crm_time_new(NULL);
     data_set.flags |= pe_flag_quick_location;
     data_set.localhost = stonith_our_uname;
 
-    cluster_status(&data_set);
-    do_calculations(&data_set, NULL, NULL);
-
+    cluster_status(&data_set);						/* cibを展開 */
+    do_calculations(&data_set, NULL, NULL);			/* 状態遷移を計算 */
+	/* リソース情報をすべて処理して、stonithリソースの場合は、デバイスリストを更新 */
     for (gIter = data_set.resources; gIter != NULL; gIter = gIter->next) {
         cib_device_update(gIter->data, &data_set);
     }
     data_set.input = NULL; /* Wasn't a copy */
-    cleanup_alloc_calculations(&data_set);
+    cleanup_alloc_calculations(&data_set);			/* data_set領域を解放 */
 }
 
 static void
@@ -874,19 +882,20 @@ update_cib_cache_cb(const char *event, xmlNode * msg)
         }
         CRM_ASSERT(local_cib != NULL);
     }
-	/* cibの更新データを元して、stonith情報を更新する */
+	/* cibの更新データを元して、stonith情報(topology/device_list)を更新する */
     update_fencing_topology(event, msg);
     update_cib_stonith_devices(event, msg);
 }
-
+/* 初期cib情報によるfencing_topology,デバイスリストの生成 */
 static void
 init_cib_cache_cb(xmlNode * msg, int call_id, int rc, xmlNode * output, void *user_data)
 {
     crm_info("Updating device list from the cib: init");
     have_cib_devices = TRUE;
     local_cib = copy_xml(output);
-
+	/* cib情報からfencing_topologyをセット */
     fencing_topology_init(msg);
+	/* cib情報からデバイスリストを更新 */
     cib_devices_update();
 }
 
@@ -945,7 +954,7 @@ static struct crm_option long_options[] = {
     {0, 0, 0, 0}
 };
 /* *INDENT-ON* */
-
+/* CIB接続の初期化 */
 static void
 setup_cib(void)
 {
@@ -957,7 +966,7 @@ setup_cib(void)
     }
 
     if (cib_new_fn != NULL) {
-        cib_api = (*cib_new_fn) ();
+        cib_api = (*cib_new_fn) ();			/* cib処理の生成 */
     }
 
     if (cib_api == NULL) {
@@ -972,15 +981,16 @@ setup_cib(void)
 
     if (rc != pcmk_ok) {
         crm_err("Could not connect to the CIB service: %s (%d)", pcmk_strerror(rc), rc);
-    /* CIBの更新コールバックのセット */
+    /* CIBのT_CIB_DIFF_NOTIFYコールバックのセット */
     } else if (pcmk_ok !=
                cib_api->cmds->add_notify_callback(cib_api, T_CIB_DIFF_NOTIFY, update_cib_cache_cb)) {
         crm_err("Could not set CIB notification callback");
 
     } else {
+	/* T_CIB_DIFF_NOTIFYコールバックセットに成功した場合の接続コールバックのセット */
         rc = cib_api->cmds->query(cib_api, NULL, NULL, cib_scope_local);
         cib_api->cmds->register_callback(cib_api, rc, 120, FALSE, NULL, "init_cib_cache_cb",
-                                         init_cib_cache_cb);
+                                         init_cib_cache_cb);	/* 初期cib情報によるfencing_topology,デバイスリストの生成 */
         cib_api->cmds->set_connection_dnotify(cib_api, cib_connection_destroy);
         crm_notice("Watching for stonith topology changes");
     }
@@ -993,7 +1003,7 @@ struct qb_ipcs_service_handlers ipc_callbacks = {
     .connection_closed = st_ipc_closed,
     .connection_destroyed = st_ipc_destroy
 };
-
+/* (pokeメッセージ送信) */
 static void
 st_peer_update_callback(enum crm_status_type type, crm_node_t * node, const void *data)
 {
@@ -1173,7 +1183,7 @@ main(int argc, char **argv)
         cluster.destroy = stonith_peer_hb_destroy;
 #endif
 
-        if (is_openais_cluster()) {
+        if (is_openais_cluster()) {	/* CPGメッセージコールバック */
 #if SUPPORT_COROSYNC
             cluster.destroy = stonith_peer_cs_destroy;
             cluster.cpg.cpg_deliver_fn = stonith_peer_ais_callback;
@@ -1189,17 +1199,17 @@ main(int argc, char **argv)
         stonith_our_uuid = cluster.uuid;		/* stonith_our_unameに自uuidをセット */
 
         if (no_cib_connect == FALSE) {
-            setup_cib();
+            setup_cib();						/* CIB接続の初期化 */
         }
 
     } else {
         stonith_our_uname = strdup("localhost");
     }
-
+	
     crm_set_status_callback(&st_peer_update_callback);
 	/* デバイスリストの生成 */
     device_list = g_hash_table_new_full(crm_str_hash, g_str_equal, NULL, free_device);
-
+	/* topologyリストの生成 */
     topology = g_hash_table_new_full(crm_str_hash, g_str_equal, NULL, free_topology_entry);
 
     stonith_ipc_server_init(&ipcs, &ipc_callbacks);

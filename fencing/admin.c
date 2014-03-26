@@ -431,7 +431,7 @@ main(int argc, char **argv)
             }
             break;
         case 'C':
-            rc = st->cmds->confirm(st, st_opts, target);
+            rc = st->cmds->confirm(st, st_opts, target);	/* STONITHÀs‚ÌŠm”F */
             break;
         case 'B':
             rc = mainloop_fencing(st, target, "reboot", timeout, tolerance);

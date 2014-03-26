@@ -184,6 +184,7 @@ create_device_registration_xml(const char *id, const char *namespace, const char
     xmlNode *args = create_xml_node(data, XML_TAG_ATTRS);
 
 #if HAVE_STONITH_STONITH_H
+	/* heartbeatのstonithエージェントは"fence_legacy"を設定する */
     namespace = get_stonith_provider(agent, namespace);
     if (safe_str_eq(namespace, "heartbeat")) {
         hash2field((gpointer) "plugin", (gpointer) agent, args);
@@ -199,7 +200,7 @@ create_device_registration_xml(const char *id, const char *namespace, const char
     for (; params; params = params->next) {
         hash2field((gpointer) params->key, (gpointer) params->value, args);
     }
-
+	/* 登録データを返却 */
     return data;
 }
 
@@ -1336,7 +1337,7 @@ stonith_api_status(stonith_t * stonith, int call_options, const char *id, const 
 {
     return stonith_api_call(stonith, call_options, id, "status", port, timeout, NULL);
 }
-
+/* FENCE処理 */
 static int
 stonith_api_fence(stonith_t * stonith, int call_options, const char *node, const char *action,
                   int timeout, int tolerance)
@@ -1349,7 +1350,7 @@ stonith_api_fence(stonith_t * stonith, int call_options, const char *node, const
     crm_xml_add(data, F_STONITH_ACTION, action);
     crm_xml_add_int(data, F_STONITH_TIMEOUT, timeout);
     crm_xml_add_int(data, F_STONITH_TOLERANCE, tolerance);
-
+	/* FENCE実行メッセージをstonithプロセスに送信する */
     rc = stonith_send_command(stonith, STONITH_OP_FENCE, data, NULL, call_options, timeout);
     free_xml(data);
 
@@ -2044,7 +2045,7 @@ stonith_send_notification(gpointer data, gpointer user_data)
 
     event_free(st_event);
 }
-
+/* stonithプロセスへメッセージを送信する */
 int
 stonith_send_command(stonith_t * stonith, const char *op, xmlNode * data, xmlNode ** output_data,
                      int call_options, int timeout)
@@ -2093,7 +2094,7 @@ stonith_send_command(stonith_t * stonith, const char *op, xmlNode * data, xmlNod
 
     crm_xml_add_int(op_msg, F_STONITH_TIMEOUT, timeout);
     crm_trace("Sending %s message to STONITH service, Timeout: %ds", op, timeout);
-
+	/* stonithプロセスへIPCメッセージを送信する */
     rc = crm_ipc_send(native->ipc, op_msg, ipc_flags, 1000 * (timeout + 60), &op_reply);
     free_xml(op_msg);
 
