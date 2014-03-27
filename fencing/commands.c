@@ -253,7 +253,7 @@ stonith_device_execute(stonith_device_t * device)
         crm_warn("Operation %s%s%s on %s failed: %s (%d)",
                  cmd->action, cmd->victim ? " for node " : "", cmd->victim ? cmd->victim : "",
                  device->id, pcmk_strerror(exec_rc), exec_rc);
-        cmd->done_cb(0, exec_rc, NULL, cmd);
+        cmd->done_cb(0, exec_rc, NULL, cmd);				/* コールバックを実行する */
     }
     return TRUE;
 }
@@ -590,9 +590,10 @@ build_device_from_xml(xmlNode * msg)
     device->agent = crm_element_value_copy(dev, "agent");
     device->namespace = crm_element_value_copy(dev, "namespace");
     device->params = xml2list(dev);
-
+	/* pcmk_host_listがデバイスリストの展開パラメータにある場合 */
     value = g_hash_table_lookup(device->params, STONITH_ATTR_HOSTLIST);
     if (value) {
+		/* デバイスリストのtargetsにpcmk_host_listをパースしてセットする */
         device->targets = parse_host_list(value);
     }
 
@@ -617,21 +618,24 @@ build_device_from_xml(xmlNode * msg)
 
     return device;
 }
-
+/* デバイスのパラメータ情報からタイプを取得する */
 static const char *
 target_list_type(stonith_device_t * dev)
 {
     const char *check_type = NULL;
-
+	/* デバイスのパラメータから"pcmk_host_check"を取り出す */
     check_type = g_hash_table_lookup(dev->params, STONITH_ATTR_HOSTCHECK);
 
     if (check_type == NULL) {
-
+		/* pcmk_host_checkがない場合 */
         if (g_hash_table_lookup(dev->params, STONITH_ATTR_HOSTLIST)) {
+			/* デバイスのパラメータに"pcmk_host_list"がある場合は、static-list */
             check_type = "static-list";
         } else if (g_hash_table_lookup(dev->params, STONITH_ATTR_HOSTMAP)) {
+			/* デバイスのパラメータに"pcmk_host_list"がある場合も、static-list */
             check_type = "static-list";
         } else {
+			/* その他の場合(external/sshなど)は、dynamic-list */
             check_type = "dynamic-list";
         }
     }
@@ -698,6 +702,7 @@ status_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
     free_async_command(cmd);
 
     if (!dev) {
+		/* デバイスの検索結果を保存する */
         search_devices_record_result(search, NULL, FALSE);
         return;
     }
@@ -715,9 +720,10 @@ status_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
         crm_notice("Unkown result when testing if %s can fence %s: rc=%d", dev->id, search->host,
                    rc);
     }
+    /* デバイスの検索結果を保存する */
     search_devices_record_result(search, dev->id, can);
 }
-
+/* "dynamic-list"タイプのlistコマンド実行完了コールバック */
 static void
 dynamic_list_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
 {
@@ -734,6 +740,7 @@ dynamic_list_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
      *  if the guest is still listed despite being moved to another machine
      */
     if (!dev) {
+		/* デバイスの検索結果を保存する */
         search_devices_record_result(search, NULL, FALSE);
         return;
     }
@@ -750,6 +757,7 @@ dynamic_list_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
         g_list_free_full(dev->targets, free);
         dev->targets = NULL;
     } else if (!rc) {
+		/* listコマンドの実行に成功した場合 */
         crm_info("Refreshing port list for %s", dev->id);
         g_list_free_full(dev->targets, free);
         dev->targets = parse_host_list(output);
@@ -766,6 +774,7 @@ dynamic_list_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
             can_fence = TRUE;
         }
     }
+    /* デバイスの検索結果を保存する */
     search_devices_record_result(search, dev->id, can_fence);
 }
 
@@ -1028,13 +1037,14 @@ stonith_device_action(xmlNode * msg, char **output)
     }
     return rc;
 }
-
+/* デバイスの検索結果を保存する */
 static void
 search_devices_record_result(struct device_search_s *search, const char *device, gboolean can_fence)
 {
     search->replies_received++;
 
     if (can_fence && device) {
+		/* stonith可能なデバイスならsearch情報のcapbleリストに追加する */
         search->capable = g_list_append(search->capable, strdup(device));
     }
 
@@ -1051,7 +1061,7 @@ search_devices_record_result(struct device_search_s *search, const char *device,
         free(search);
     }
 }
-
+/* 単一デバイス情報の検索情報でのフェンスチェック */
 static void
 can_fence_host_with_device(stonith_device_t * dev, struct device_search_s *search)
 {
@@ -1061,7 +1071,7 @@ can_fence_host_with_device(stonith_device_t * dev, struct device_search_s *searc
     const char *alias = NULL;
 
     CRM_LOG_ASSERT(dev != NULL);
-
+	/* デバイス、ホストがNULLなら終了 */
     if (dev == NULL) {
         goto search_report_results;
     } else if (host == NULL) {
@@ -1075,12 +1085,12 @@ can_fence_host_with_device(stonith_device_t * dev, struct device_search_s *searc
         /* this device can only execute this action on the target node */
         goto search_report_results;
     }
-
+	/* デバイスのaliasesリストから対象STONITNノードのaliasを検索 */
     alias = g_hash_table_lookup(dev->aliases, host);
     if (alias == NULL) {
-        alias = host;
+        alias = host;			/* aliasがないなら対象STONITHノードをセット */
     }
-
+	/* １つのデバイスのパラメータ情報からタイプを取得する */
     check_type = target_list_type(dev);
 
     if (safe_str_eq(check_type, "none")) {
@@ -1103,6 +1113,7 @@ can_fence_host_with_device(stonith_device_t * dev, struct device_search_s *searc
         time_t now = time(NULL);
 
         if (dev->targets == NULL || dev->targets_age + 60 < now) {
+			/* targetsがNULLか、前回list実行から60s以上経過している場合（もしくは初期実行)ならlistコマンドを実行する */
             schedule_internal_command(__FUNCTION__, dev, "list", NULL,
                                       search->per_device_timeout, search, dynamic_list_search_cb);
 
@@ -1131,15 +1142,16 @@ can_fence_host_with_device(stonith_device_t * dev, struct device_search_s *searc
     }
 
   search_report_results:
+	  /* デバイスの検索結果を保存する */
     search_devices_record_result(search, dev ? dev->id : NULL, can);
 }
-
+/* デバイスリストの検索処理 */
 static void
 search_devices(gpointer key, gpointer value, gpointer user_data)
 {
     stonith_device_t *dev = value;
     struct device_search_s *search = user_data;
-
+	/* 単一デバイス情報をサーチ情報でフェンスチェック */
     can_fence_host_with_device(dev, search);
 }
 
@@ -1162,15 +1174,17 @@ get_capable_devices(const char *host, const char *action, int timeout, void *use
     }
 
     search = calloc(1, sizeof(struct device_search_s));
-    if (!search) {
+    if (!search) {							/* サーチデータが生成できない場合 */
         callback(NULL, user_data);
         return;
     }
-
+	/* このノードのデバイスリストをすべて処理する */
     g_hash_table_iter_init(&gIter, device_list);
     while (g_hash_table_iter_next(&gIter, (void **)&key, (void **)&device)) {
+		/* １つのデバイスのパラメータ情報からタイプを取得する */
         check_type = target_list_type(device);
         if (safe_str_eq(check_type, "status") || safe_str_eq(check_type, "dynamic-list")) {
+			/* タイプが"status"か"dynamic-list"ならカウントアップ */
             devices_needing_async_query++;
         }
     }
@@ -1179,12 +1193,15 @@ get_capable_devices(const char *host, const char *action, int timeout, void *use
      * nodes they can fence, we have to give the events a timeout. The total
      * query timeout is divided among those events. */
     if (devices_needing_async_query) {
+		/* devices_needing_async_queryがカウントアップされている場合 */
+		/* --- このノードのデバイスリストに"status" "dynamic-list"のタイプのデバイスがある場合 --- */
+        /* タイムアウトを算出 */
         per_device_timeout = timeout / devices_needing_async_query;
-        if (!per_device_timeout) {
+        if (!per_device_timeout) {	/* 算出タイムアウト異常(1) */
             crm_err("stonith-timeout duration %d is too low, raise the duration to %d seconds",
                     timeout, DEFAULT_QUERY_TIMEOUT * devices_needing_async_query);
             per_device_timeout = DEFAULT_QUERY_TIMEOUT;
-        } else if (per_device_timeout < DEFAULT_QUERY_TIMEOUT) {
+        } else if (per_device_timeout < DEFAULT_QUERY_TIMEOUT) { /* 算出タイムアウト異常(2) */
             crm_notice
                 ("stonith-timeout duration %d is low for the current configuration. Consider raising it to %d seconds",
                  timeout, DEFAULT_QUERY_TIMEOUT * devices_needing_async_query);
@@ -1201,11 +1218,12 @@ get_capable_devices(const char *host, const char *action, int timeout, void *use
     search->callback = callback;
     search->user_data = user_data;
     /* kick off the search */
-
+	/* 検索実行前のデバックメッセージ */
     crm_debug("Searching through %d devices to see what is capable of action (%s) for target %s",
               search->replies_needed,
               search->action ? search->action : "<unknown>",
               search->host ? search->host : "<anyone>");
+    /* デバイスリスト検索の実行 */
     g_hash_table_foreach(device_list, search_devices, search);
 }
 
@@ -1217,7 +1235,8 @@ struct st_query_data {
     char *action;
     int call_options;
 };
-
+/* get_capable_devices処理の実行コールバック */
+/*                 devices引数には、STONITH可能なデバイスが積み上げれれている */
 static void
 stonith_query_capable_device_cb(GList * devices, void *user_data)
 {
@@ -1228,6 +1247,7 @@ stonith_query_capable_device_cb(GList * devices, void *user_data)
     GListPtr lpc = NULL;
 
     /* Pack the results into data */
+    /* STONITH可能なデバイス情報をQUERY応答用のXMLに積み上げる */
     list = create_xml_node(NULL, __FUNCTION__);
     crm_xml_add(list, F_STONITH_TARGET, query->target);
     for (lpc = devices; lpc != NULL; lpc = lpc->next) {
@@ -1269,7 +1289,7 @@ stonith_query_capable_device_cb(GList * devices, void *user_data)
         crm_trace("Attaching query list output");
         add_message_xml(query->reply, F_STONITH_CALLDATA, list);
     }
-    /* QUERY応答の送信 */
+    /* QUERY応答の送信(STONITH可能なデバイス情報を送信) */
     stonith_send_reply(query->reply, query->call_options, query->remote_peer, query->client_id);
 
     free_xml(query->reply);
@@ -1302,7 +1322,7 @@ stonith_query(xmlNode * msg, const char *remote_peer, const char *client_id, int
             return;
         }
     }
-	/* QUERYデータを生成 */
+	/* QUERYメッセージデータを生成 */
     crm_log_xml_debug(msg, "Query");
     query = calloc(1, sizeof(struct st_query_data));
 
@@ -1740,7 +1760,7 @@ check_alternate_host(const char *target)
     const char *alternate_host = NULL;
 
     if (g_hash_table_lookup(topology, target) && safe_str_eq(target, stonith_our_uname)) {
-		/* fencing_topologyに設定されているSTONITH対象で、自ノードの場合 */
+		/* fencing_topologyに設定されているSTONITH対象で、STONITH対象が自ノードの場合 */
         GHashTableIter gIter;
         crm_node_t *entry = NULL;
 		/* crmdの認識している接続ノードハッシュテーブルを検索する */
@@ -1771,8 +1791,10 @@ stonith_send_reply(xmlNode * reply, int call_options, const char *remote_peer,
                    const char *client_id)
 {
     if (remote_peer) {
+		/* 他ノードへの応答の場合 */
         send_cluster_message(crm_get_peer(0, remote_peer), crm_msg_stonith_ng, reply, FALSE);
     } else {
+		/* 自ノード内の応答の場合 */
         do_local_reply(reply, client_id, is_set(call_options, st_opt_sync_call), remote_peer != NULL);
     }
 }
@@ -1824,6 +1846,8 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
     } else if (crm_str_eq(op, STONITH_OP_QUERY, TRUE)) {
 		/* STONITH_OP_QUERYメッセージの場合 */
         if (remote_peer) {
+			/* 接続クライアント以外(ノードのstonithプロセスから)のSTONITH(STONITH_OP_FENCE)要求の場合 */
+            /* リモートSTONITH用の操作データを生成して、このノードのstonithの実行リストに追加する */
             create_remote_stonith_op(client_id, request, TRUE); /* Record it for the future notification */
         }
         /* QUERY処理 */
@@ -1853,7 +1877,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
 
     } else if (crm_str_eq(op, STONITH_OP_RELAY, TRUE)) {
 		/* 他ノードからのSTONITH実行ノードへのSTONITH_OP_RELAYメッセージ */
-		/* すでにDCノードのstonithプロセスで自ノードをSTONITH可能なノードが見つかった場合に利用される */
+		/* DCノードのstonithプロセスでDCノードをSTONITH可能なノードが見つかった場合に利用される */
         xmlNode *dev = get_xpath_object("//@" F_STONITH_TARGET, request, LOG_TRACE);
 
         crm_notice("Peer %s has received a forwarded fencing request from %s to fence (%s) peer %s",
@@ -1869,7 +1893,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
     } else if (crm_str_eq(op, STONITH_OP_FENCE, TRUE)) {
 		/* FENCE動作の要求 */
         if (remote_peer || stand_alone) {
-			/* stand_aloneモード(-s起動)、または、接続クライアント以外(ノードのstonithプロセスから)のSTONITH(STONITH_OP_FENCE)要求の場合 */
+			/* stand_aloneモード(-s起動)、または、他ノードからのSTONITH(STONITH_OP_FENCE)要求の場合 */
             rc = stonith_fence(request);
 
         } else if (call_options & st_opt_manual_ack) {
@@ -1911,7 +1935,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
             alternate_host = check_alternate_host(target);
 
             if (alternate_host && client) {
-		/* 自ノードのSTONITHの場合で、topologyから実行ホストが決まっていて、クラスタメンバーの場合 */
+			/* 自ノードのSTONITHの場合で、topologyから実行ホストが決まっていて、クラスタメンバーの場合 */
                 const char *client_id = NULL;
 
                 crm_notice("Forwarding complex self fencing request to peer %s", alternate_host);
@@ -1922,6 +1946,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
                     client_id = crm_element_value(request, F_STONITH_CLIENTID);
                 }
                 /* Create a record of it, otherwise call_id will be 0 if we need to notify of failures */
+                /* リモートSTONITH用の操作データを生成して、このノードのstonithの実行リストに追加する */
                 create_remote_stonith_op(client_id, request, FALSE);
 
                 crm_xml_add(request, F_STONITH_OPERATION, STONITH_OP_RELAY);
@@ -1930,7 +1955,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
                 send_cluster_message(crm_get_peer(0, alternate_host), crm_msg_stonith_ng, request,
                                      FALSE);
                 rc = -EINPROGRESS;
-		/* 他ノード及び、自ノードをSONTIH可能な実行ホストが不明の場合ののREMOTE STONITH処理 */
+			/* 他ノード及び、自ノードをSONTIH可能な実行ホストが不明の場合ののREMOTE STONITH処理 */
             } else if (initiate_remote_stonith_op(client, request, FALSE) != NULL) {	
                 rc = -EINPROGRESS;
             }

@@ -555,15 +555,17 @@ stonith_manual_ack(xmlNode * msg, remote_fencing_op_t * op)
  *        owner executes the operation.  All the nodes get the results to the operation
  *        once the owner finishes executing it.
  */
+/* リモートSTONITH用の操作データを生成して、このノードのstonithの実行リストに追加する */
 void *
 create_remote_stonith_op(const char *client, xmlNode * request, gboolean peer)
 {
     remote_fencing_op_t *op = NULL;
+    /* リクエストの中から"st_target"を取り出す */
     xmlNode *dev = get_xpath_object("//@" F_STONITH_TARGET, request, LOG_TRACE);
     int call_options = 0;
 
     if (remote_op_list == NULL) {
-		/* stonithの実行リストを生成する */
+		/* remote_op_listが空の場合は、stonithの実行リストを生成する */
         remote_op_list = g_hash_table_new_full(crm_str_hash, g_str_equal, NULL, free_remote_op);
     }
 
@@ -590,7 +592,7 @@ create_remote_stonith_op(const char *client, xmlNode * request, gboolean peer)
     } else {
         op->id = crm_generate_uuid();
     }
-	/* stonithの実行リストに追加する */
+	/* このノードのstonithの実行リストに追加する */
     g_hash_table_replace(remote_op_list, op->id, op);
     CRM_LOG_ASSERT(g_hash_table_lookup(remote_op_list, op->id) != NULL);
     crm_trace("Created %s", op->id);
@@ -661,6 +663,7 @@ initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean ma
     }
 
     CRM_LOG_ASSERT(client_id != NULL);
+	/* リモートSTONITH用の操作データを生成して、このノードのstonithの実行リストに追加する */
     op = create_remote_stonith_op(client_id, request, FALSE);
     op->owner = TRUE;
     if (manual_ack) {
@@ -726,7 +729,7 @@ enum find_best_peer_options {
     /*! Skip peers and devices that are not verified */
     FIND_PEER_VERIFIED_ONLY = 0x0004,
 };
-
+/* もっとも最適なSTONITHの実行ノードを決定する */
 static st_query_result_t *
 find_best_peer(const char *device, remote_fencing_op_t * op, enum find_best_peer_options options)
 {
@@ -776,7 +779,7 @@ find_best_peer(const char *device, remote_fencing_op_t * op, enum find_best_peer
 
     return NULL;
 }
-
+/* stonithを実行させるノードを決定する */
 static st_query_result_t *
 stonith_choose_peer(remote_fencing_op_t * op)
 {
@@ -791,7 +794,7 @@ stonith_choose_peer(remote_fencing_op_t * op)
         } else {
             crm_trace("Checking for someone to fence %s", op->target);
         }
-
+		/* もっとも最適なSTONITHの実行ノードを決定する */
         peer = find_best_peer(device, op, FIND_PEER_SKIP_TARGET|FIND_PEER_VERIFIED_ONLY);
         if (peer) {
             crm_trace("Found verified peer %s for %s", peer->host, device?device:"<any>");
@@ -955,10 +958,12 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
 
     crm_trace("State for %s.%.8s: %s %d", op->target, op->client_name, op->id, op->state);
     if (peer == NULL && !is_set(op->call_options, st_opt_topology)) {
+        /* stonithを実行させるノードを決定する */
         peer = stonith_choose_peer(op);
     }
 
     if (!op->op_timer_total) {
+		/* タイマーのセット */
         int total_timeout = get_op_total_timeout(op, peer, op->base_timeout);
 
         op->total_timeout = TIMEOUT_MULTIPLY_FACTOR * total_timeout;
@@ -973,6 +978,9 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
         /* When using topology, the stonith_choose_peer function pops off
          * the peer from the op's query results.  Make sure to calculate
          * the op_timeout before calling this function when topology is in use */
+         
+        /* topologyの設定されているstonithでデバイスが決定している場合は、*/
+        /* stonithを実行させるノードを決定する */
         peer = stonith_choose_peer(op);
         device = op->devices->data;
         timeout = get_device_timeout(peer, device, op->base_timeout);
@@ -1156,6 +1164,7 @@ process_remote_stonith_query(xmlNode * msg)
         return pcmk_ok;
 
     } else if (host_is_target) {
+		/* QUERY応答の送信元とSTONITHの対象となるノードが同じ場合 */
         if (op->call_options & st_opt_allow_suicide) {
             crm_trace("Allowing %s to potentialy fence itself", op->target);
         } else {
@@ -1171,7 +1180,7 @@ process_remote_stonith_query(xmlNode * msg)
     result->devices = devices;
     result->custom_action_timeouts = g_hash_table_new_full(crm_str_hash, g_str_equal, free, NULL);
     result->verified_devices = g_hash_table_new_full(crm_str_hash, g_str_equal, free, NULL);
-
+	/* 受信したQUERY応答のSTONITH可能なデバイス情報を操作情報のquery_resultに積み上げる為に、作業リストに積み上げる */
     for (child = __xml_first_child(dev); child != NULL; child = __xml_next(child)) {
         const char *device = ID(child);
         int action_timeout = 0;
@@ -1198,7 +1207,7 @@ process_remote_stonith_query(xmlNode * msg)
     CRM_CHECK(devices == g_list_length(result->device_list),
               crm_err("Mis-match: Query claimed to have %d devices but %d found", devices,
                       g_list_length(result->device_list)));
-
+	/* 操作情報のquery_resultsリストをソートする */
     op->query_results = g_list_insert_sorted(op->query_results, result, sort_peers);
 
     if (is_set(op->call_options, st_opt_topology)) {
@@ -1271,7 +1280,7 @@ process_remote_stonith_exec(xmlNode * msg)
     if (op == NULL && rc == pcmk_ok) {
         /* Record successful fencing operations */
         const char *client_id = crm_element_value(dev, F_STONITH_CLIENTID);
-
+		/* リモートSTONITH用の操作データを生成して、このノードのstonithの実行リストに追加する */
         op = create_remote_stonith_op(client_id, dev, TRUE);
     }
 

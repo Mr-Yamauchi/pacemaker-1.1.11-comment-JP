@@ -109,7 +109,7 @@ send_stonith_update(crm_action_t * action, const char *target, const char *uuid)
     free_xml(node_state);
     return;
 }
-
+/* FENCING処理 */
 static gboolean
 te_fence_node(crm_graph_t * graph, crm_action_t * action)
 {
@@ -145,10 +145,10 @@ te_fence_node(crm_graph_t * graph, crm_action_t * action)
     if (crmd_join_phase_count(crm_join_confirmed) == 1) {
         options |= st_opt_allow_suicide;
     }
-
+	/* STONITH APIのfences処理でFENCINGを実行する */
     rc = stonith_api->cmds->fence(stonith_api, options, target, type,
                                   transition_graph->stonith_timeout / 1000, 0);
-
+	/* fence処理のコールバックをセット */
     stonith_api->cmds->register_callback(stonith_api, rc, transition_graph->stonith_timeout / 1000,
                                          st_opt_timeout_updates,
                                          generate_transition_key(transition_graph->id, action->id,

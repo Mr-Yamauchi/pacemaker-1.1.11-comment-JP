@@ -366,7 +366,7 @@ pcmk_cpg_membership(cpg_handle_t handle,
     gboolean found = FALSE;
     static int counter = 0;
     uint32_t local_nodeid = get_local_nodeid(handle);
-
+	/* クラスタからの離脱ノード情報から、接続情報をOFFLINESTATUSで更新する */
     for (i = 0; i < left_list_entries; i++) {
         crm_node_t *peer = crm_get_peer(left_list[i].nodeid, NULL);
 
@@ -377,7 +377,7 @@ pcmk_cpg_membership(cpg_handle_t handle,
     for (i = 0; i < joined_list_entries; i++) {
         crm_info("Joined[%d.%d] %s.%u ", counter, i, groupName->value, joined_list[i].nodeid);
     }
-
+	/* クラスタからの構成ノード情報から、接続情報をONLINESTATUSで更新する */
     for (i = 0; i < member_list_entries; i++) {
         crm_node_t *peer = crm_get_peer(member_list[i].nodeid, NULL);
 

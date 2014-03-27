@@ -391,6 +391,7 @@ crm_get_peer(unsigned int id, const char *uname)
     }
 
     if (node == NULL) {
+		/* crm_peer_cache‚ÉV‹Kƒm[ƒhƒf[ƒ^‚ğ“o˜^‚·‚é */
         char *uniqueid = crm_generate_uuid();
 
         node = calloc(1, sizeof(crm_node_t));
