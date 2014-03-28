@@ -250,7 +250,7 @@ stonith_api_remove_level(stonith_t * st, int options, const char *node, int leve
 
     return rc;
 }
-
+/* 単一のfencing-levelのデータから登録用のxml("st_level")を生成する */
 xmlNode *
 create_level_registration_xml(const char *node, int level, stonith_key_value_t * device_list)
 {

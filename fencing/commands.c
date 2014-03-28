@@ -325,7 +325,7 @@ free_device(gpointer data)
     free(device->id);
     free(device);
 }
-
+/* ホストの別名情報をハッシュテーブルに構築する */
 static GHashTable *
 build_port_aliases(const char *hostmap, GListPtr * targets)
 {
@@ -598,6 +598,7 @@ build_device_from_xml(xmlNode * msg)
     }
 
     value = g_hash_table_lookup(device->params, STONITH_ATTR_HOSTMAP);
+    /* ホストの別名情報をハッシュテーブルに構築する */
     device->aliases = build_port_aliases(value, &(device->targets));
 
     device->agent_metadata = get_agent_metadata(device->agent);
@@ -740,12 +741,13 @@ dynamic_list_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
      *  if the guest is still listed despite being moved to another machine
      */
     if (!dev) {
-		/* デバイスの検索結果を保存する */
+		/* デバイスが存在しない場合の検索結果（ＮＵＬＬ）を保存する */
         search_devices_record_result(search, NULL, FALSE);
         return;
     }
 
     dev->active_pid = 0;
+    /* device用の残処理を実行させる為に、トリガーをたたく */
     mainloop_set_trigger(dev->work);
 
     /* If we successfully got the targets earlier, don't disable. */
@@ -925,7 +927,7 @@ free_topology_entry(gpointer data)
     free(tp->node);
     free(tp);
 }
-
+/* 登録用のxml("st_level")からtopologyハッシュテーブルに登録する */
 int
 stonith_level_register(xmlNode * msg, char **desc)
 {
@@ -935,17 +937,20 @@ stonith_level_register(xmlNode * msg, char **desc)
 
     xmlNode *level = get_xpath_object("//" F_STONITH_LEVEL, msg, LOG_ERR);
     const char *node = crm_element_value(level, F_STONITH_TARGET);
+    /* topologyハッシュテーブルからF_STONITH_TARGET（対象ノード)を検索する */
     stonith_topology_t *tp = g_hash_table_lookup(topology, node);
-
+	/* "st_level"内の"id"を取りだす */
     crm_element_value_int(level, XML_ATTR_ID, &id);
     if (desc) {
         *desc = g_strdup_printf("%s[%d]", node, id);
     }
     if (id <= 0 || id >= ST_LEVEL_MAX) {
+		/* index範囲えらー */
         return -EINVAL;
     }
 
     if (tp == NULL) {
+		/* topologyハッシュテーブルに存在しない場合は、新規に登録する */
         tp = calloc(1, sizeof(stonith_topology_t));
         tp->node = strdup(node);
         g_hash_table_replace(topology, tp->node, tp);
@@ -954,17 +959,18 @@ stonith_level_register(xmlNode * msg, char **desc)
     }
 
     if (tp->levels[id] != NULL) {
+		/* 存在するレベル(index)の場合はログ出力 */
         crm_info("Adding to the existing %s[%d] topology entry (%d active entries)", node, id,
                  count_active_levels(tp));
     }
-
+	/* 対象ノードのlevelリストをすべて処理する */
     for (child = __xml_first_child(level); child != NULL; child = __xml_next(child)) {
         const char *device = ID(child);
-
+		/* 対象level(index)にデバイスを登録する */
         crm_trace("Adding device '%s' for %s (%d)", device, node, id);
         tp->levels[id] = g_list_append(tp->levels[id], strdup(device));
     }
-
+	/* 登録情報のログ出力 */
     crm_info("Node %s has %d active fencing levels", node, count_active_levels(tp));
     return rc;
 }
@@ -1251,15 +1257,17 @@ stonith_query_capable_device_cb(GList * devices, void *user_data)
     list = create_xml_node(NULL, __FUNCTION__);
     crm_xml_add(list, F_STONITH_TARGET, query->target);
     for (lpc = devices; lpc != NULL; lpc = lpc->next) {
+		/* 結果のデータが自ノードのdevice_list(自ノードに配置可能なデバイス)に存在するか */
         stonith_device_t *device = g_hash_table_lookup(device_list, lpc->data);
         int action_specific_timeout;
 
         if (!device) {
+			/* 存在しないデバイスは処理しない */
             /* It is possible the device got unregistered while
              * determining who can fence the target */
             continue;
         }
-
+		/* 実行可能なデバイス数をカウントあっぷ */
         available_devices++;
 
         action_specific_timeout = get_action_timeout(device, query->action, 0);
@@ -1277,7 +1285,7 @@ stonith_query_capable_device_cb(GList * devices, void *user_data)
             g_hash_table_foreach(device->params, hash2field, attrs);
         }
     }
-
+	/* "st-available-devices"に実行可能なデバイス数をセット */
     crm_xml_add_int(list, "st-available-devices", available_devices);
     if (query->target) {
         crm_debug("Found %d matching devices for '%s'", available_devices, query->target);
@@ -1482,7 +1490,7 @@ st_child_done(GPid pid, int rc, const char *output, gpointer user_data)
         if (rc == pcmk_ok &&
             (safe_str_eq(cmd->action, "list") ||
              safe_str_eq(cmd->action, "monitor") || safe_str_eq(cmd->action, "status"))) {
-
+			/* list,monitor,statusが成功した場合にはデバイスを確認済にする */
             device->verified = TRUE;
         }
 
@@ -1634,6 +1642,7 @@ stonith_fence(xmlNode * msg)
 
     device_id = crm_element_value(dev, F_STONITH_DEVICE);
     if (device_id) {
+		/* 実行するデバイスが決定している場合 */
         device = g_hash_table_lookup(device_list, device_id);
         if (device == NULL) {
             crm_err("Requested device '%s' is not available", device_id);
@@ -1993,7 +2002,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
     } else if (crm_str_eq(op, STONITH_OP_LEVEL_ADD, TRUE)) {
         char *id = NULL;
         xmlNode *notify_data = create_xml_node(NULL, op);
-
+		/* 登録用のxml("st_level")からtopologyハッシュテーブルに登録する */
         rc = stonith_level_register(request, &id);
 
         crm_xml_add(notify_data, F_STONITH_DEVICE, id);
@@ -2067,7 +2076,7 @@ handle_reply(crm_client_t * client, xmlNode * request, const char *remote_peer)
 		/* T_STONITH_NOTIFY応答メッセージ */
         process_remote_stonith_exec(request);
     } else if (crm_str_eq(op, STONITH_OP_FENCE, TRUE)) {
-		/* STONITH_OP_FENCE応答メッセージ */
+		/* STONITH_OP_FENCE応答メッセージ(STONITH完了メッセージ) */
         /* Reply to a complex fencing op */
         process_remote_stonith_exec(request);
     } else {

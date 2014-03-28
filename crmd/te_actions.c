@@ -143,6 +143,7 @@ te_fence_node(crm_graph_t * graph, crm_action_t * action)
     te_connect_stonith(NULL);
 
     if (crmd_join_phase_count(crm_join_confirmed) == 1) {
+		/* クラスタのJOINノード数が１の場合、FENCING動作に自殺可能なオプションをセット */
         options |= st_opt_allow_suicide;
     }
 	/* STONITH APIのfences処理でFENCINGを実行する */

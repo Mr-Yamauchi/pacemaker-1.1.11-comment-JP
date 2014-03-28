@@ -295,7 +295,7 @@ get_stonith_flag(const char *name)
     }
     return 0;
 }
-
+/* NOTIFY IPC通信 */
 static void
 stonith_notify_client(gpointer key, gpointer value, gpointer user_data)
 {
@@ -379,7 +379,10 @@ do_stonith_notify(int options, const char *type, int result, xmlNode * data)
     free_xml(update_msg);
     crm_trace("Notify complete");
 }
-
+/* 単一のfencing-level内のdevicesを展開する */
+/* 
+      <fencing-level target="srv01" devices="prmStonith2-1" index="1" id="fencing"/>
+*/
 static stonith_key_value_t *
 parse_device_list(const char *devices)
 {
@@ -408,7 +411,10 @@ parse_device_list(const char *devices)
 
     return output;
 }
-
+/* fencing-levelの情報をtopologyハッシュテーブルから削除する */
+/*
+      <fencing-level target="srv01" devices="prmStonith2-1" index="1" id="fencing"/>
+*/
 static void
 topology_remove_helper(const char *node, int level)
 {
@@ -432,20 +438,25 @@ topology_remove_helper(const char *node, int level)
     free_xml(data);
     free(desc);
 }
-
+/* fencing-levelの情報をtopologyハッシュテーブルに登録する */
+/*
+      <fencing-level target="srv01" devices="prmStonith2-1" index="1" id="fencing"/>
+*/
 static void
 topology_register_helper(const char *node, int level, stonith_key_value_t * device_list)
 {
     int rc;
     char *desc = NULL;
+    /* NOTYFY用のst_level_addデータを生成する */
     xmlNode *notify_data = create_xml_node(NULL, STONITH_OP_LEVEL_ADD);
+    /* fencing-levelのデータから登録用のxmlを生成する */
     xmlNode *data = create_level_registration_xml(node, level, device_list);
-
+	/* 生成した登録用のxml("st_level")から登録する */
     rc = stonith_level_register(data, &desc);
-
+	/* NOTIFY用のst_level_addデータにデータを積み上げる */
     crm_xml_add(notify_data, F_STONITH_DEVICE, desc);
     crm_xml_add_int(notify_data, F_STONITH_ACTIVE, g_hash_table_size(topology));
-
+	/* NOTIFYを送信 */
     do_stonith_notify(0, STONITH_OP_LEVEL_ADD, rc, notify_data);
 
     free_xml(notify_data);
@@ -476,7 +487,7 @@ remove_cib_device(xmlXPathObjectPtr xpathObj)
         stonith_device_remove(rsc_id, TRUE);
     }
 }
-
+/* fencing-levelの情報をtopologyハッシュテーブルから削除する */
 static void
 remove_fencing_topology(xmlXPathObjectPtr xpathObj)
 {
@@ -507,6 +518,15 @@ remove_fencing_topology(xmlXPathObjectPtr xpathObj)
     }
 }
 /* fencing_topologyを登録する */
+/*
+例)
+    <fencing-topology>
+      <fencing-level target="srv01" devices="prmStonith2-1" index="1" id="fencing"/>
+      <fencing-level target="srv01" devices="prmStonith2-2" index="2" id="fencing-0"/>
+      <fencing-level target="srv02" devices="prmStonith1-1" index="1" id="fencing-1"/>
+      <fencing-level target="srv02" devices="prmStonith1-2" index="2" id="fencing-2"/>
+    </fencing-topology>
+*/
 static void
 register_fencing_topology(xmlXPathObjectPtr xpathObj, gboolean force)
 {
@@ -524,6 +544,7 @@ register_fencing_topology(xmlXPathObjectPtr xpathObj, gboolean force)
         crm_element_value_int(match, XML_ATTR_STONITH_INDEX, &index);
         target = crm_element_value(match, XML_ATTR_STONITH_TARGET);
         dev_list = crm_element_value(match, XML_ATTR_STONITH_DEVICES);
+        /* devices属性をパース(カンマ設定の場合あり) */
         devices = parse_device_list(dev_list);
 
         crm_trace("Updating %s[%d] (%s) to %s", target, index, ID(match), dev_list);
@@ -536,11 +557,14 @@ register_fencing_topology(xmlXPathObjectPtr xpathObj, gboolean force)
 
         } else if (force == FALSE && crm_element_value(match, XML_DIFF_MARKER)) {
             /* Addition */
+            /* fencing-levelの情報をtopologyハッシュテーブルに登録する */
             topology_register_helper(target, index, devices);
 
         } else {                /* Modification */
             /* Remove then re-add */
+            /* fencing-levelの情報をtopologyハッシュテーブルから削除する */
             topology_remove_helper(target, index);
+            /* fencing-levelの情報をtopologyハッシュテーブルに登録する */
             topology_register_helper(target, index, devices);
         }
 
@@ -607,6 +631,7 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
     }
 
     if(g_hash_table_lookup(device_list, rsc_name(rsc))) {
+		/* 登録済の場合は、一旦削除 */
         stonith_device_remove(rsc_name(rsc), TRUE);
     }
 
@@ -617,7 +642,7 @@ static void cib_device_update(resource_t *rsc, pe_working_set_t *data_set)
 	
     value = g_hash_table_lookup(rsc->meta, XML_RSC_ATTR_TARGET_ROLE);
     if(value && strcmp(RSC_STOPPED, value) == 0) {
-		/* target_rolwがSTOPPEDの場合はほ処理しない */
+		/* target_rolwがSTOPPEDの場合は処理しない */
         crm_info("Device %s has been disabled", rsc->id);
         return;
 
