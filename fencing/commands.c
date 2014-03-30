@@ -1330,7 +1330,7 @@ stonith_query(xmlNode * msg, const char *remote_peer, const char *client_id, int
             return;
         }
     }
-	/* QUERYメッセージデータを生成 */
+	/* QUERY応答メッセージデータを生成 */
     crm_log_xml_debug(msg, "Query");
     query = calloc(1, sizeof(struct st_query_data));
 

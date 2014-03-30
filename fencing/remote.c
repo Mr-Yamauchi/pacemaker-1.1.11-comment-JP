@@ -770,7 +770,7 @@ find_best_peer(const char *device, remote_fencing_op_t * op, enum find_best_peer
 				/* VERYFYのみで...VERYFIデバイス(存在確認済)に存在しない場合は処理しな */
                 continue;
             }
-
+			/* UERY結果のデバイスとtopologyデータとのマッチング */
             match = g_list_find_custom(peer->device_list, device, sort_strings);
             if (match) {
                 crm_trace("Removing %s from %s (%d remaining)", (char *)match->data, peer->host,
@@ -778,7 +778,7 @@ find_best_peer(const char *device, remote_fencing_op_t * op, enum find_best_peer
                 peer->device_list = g_list_remove(peer->device_list, match->data);
                 return peer;
             }
-
+			/* マッチしないばあい */
         } else if (peer->devices > 0 && peer->tried == FALSE) {
 			/* QUERY応答の実行可能なデバイス数が０以上で、STONITHを依頼済(STONITH_OP_FENCE)していないホストからのQUERY応答のデータの場合 */
             if (verified_devices_only && !g_hash_table_size(peer->verified_devices)) {
