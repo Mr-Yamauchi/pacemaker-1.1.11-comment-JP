@@ -396,6 +396,7 @@ topology_is_empty(stonith_topology_t *tp)
 }
 
 /* deep copy the device list */
+/* fencing_topologyのデバイス情報をremote_fencing_op_t情報のデバイス情報にセットする */
 static void
 set_op_device_list(remote_fencing_op_t * op, GListPtr devices)
 {
@@ -409,7 +410,7 @@ set_op_device_list(remote_fencing_op_t * op, GListPtr devices)
     for (lpc = devices; lpc != NULL; lpc = lpc->next) {
         op->devices_list = g_list_append(op->devices_list, strdup(lpc->data));
     }
-    /* remote_fencing_op_t情報のデバイスにemote_fencing_op_t情報のデバイスリストをセットする */
+    /* remote_fencing_op_t情報のデバイスにremote_fencing_op_t情報のデバイスリストをセットする */
     op->devices = op->devices_list;	
 }
 /* 実行するデバイスリスト(remote_fencing_op_t情報のデバイス)をtopologyの設定内容から再セットする */
@@ -441,6 +442,7 @@ stonith_topology_next(remote_fencing_op_t * op)
                   op->level, op->target, g_list_length(tp->levels[op->level]),
                   op->client_name, op->originator, op->id);
         /* 実行するレベルからlevelの最後までのdeiceをtopologyからremote_fencing_op_t情報にセットする */
+        /* --- fencing_topologyのデバイス情報をremote_fencing_op_t情報のデバイス情報にセットする --- */
         set_op_device_list(op, tp->levels[op->level]);
         return pcmk_ok;
     }
@@ -678,7 +680,8 @@ initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean ma
     }
     
     CRM_CHECK(op->action, return NULL);
-	/* 次の実行toplogyのindex(op->level)と実行デバイス情報をセットする */
+	/* 最初の実行toplogyのindex(op->level)と実行デバイス情報をセット */
+	/* もしくは、次の実行toplogyのindex(op->level)と実行デバイス情報をセットする */
 	/* topologyが対象ノードに存在しない場合、もしくは未設定の場合は、pcmk_okが返される */
     if (stonith_topology_next(op) != pcmk_ok) {
         op->state = st_failed;
@@ -770,7 +773,7 @@ find_best_peer(const char *device, remote_fencing_op_t * op, enum find_best_peer
 				/* VERYFYのみで...VERYFIデバイス(存在確認済)に存在しない場合は処理しな */
                 continue;
             }
-			/* UERY結果のデバイスとtopologyデータとのマッチング */
+			/* QUERY結果のデバイスとtopologyデータとのマッチング */
             match = g_list_find_custom(peer->device_list, device, sort_strings);
             if (match) {
                 crm_trace("Removing %s from %s (%d remaining)", (char *)match->data, peer->host,
@@ -1142,6 +1145,7 @@ all_topology_devices_found(remote_fencing_op_t * op)
     return TRUE;
 }
 /* QUERY応答受信処理 */
+/* --- QUERY応答を元にしてSTONITH実行ノードへFENCE通知する ---- */
 int
 process_remote_stonith_query(xmlNode * msg)
 {
@@ -1284,7 +1288,7 @@ process_remote_stonith_query(xmlNode * msg)
 
     return pcmk_ok;
 }
-
+/* STONITH_OP_FENCE応答メッセージ(STONITH完了メッセージ) */
 int
 process_remote_stonith_exec(xmlNode * msg)
 {

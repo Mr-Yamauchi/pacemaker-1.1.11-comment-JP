@@ -447,7 +447,7 @@ parse_host_line(const char *line, int max, GListPtr * output)
         }
     }
 }
-
+/* hostlistをパースする */
 static GListPtr
 parse_host_list(const char *hosts)
 {
@@ -762,6 +762,7 @@ dynamic_list_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
 		/* listコマンドの実行に成功した場合 */
         crm_info("Refreshing port list for %s", dev->id);
         g_list_free_full(dev->targets, free);
+        /* hostlistをパースする */
         dev->targets = parse_host_list(output);
         dev->targets_age = time(NULL);
     }
@@ -773,8 +774,10 @@ dynamic_list_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
             alias = search->host;
         }
         if (string_in_list(dev->targets, alias)) {
+			/* hostlistに存在する場合はQUERY結果として応答に積み上げる */
             can_fence = TRUE;
         }
+        /* hostlistに存在する場合はQUERY結果にはつみあがらない */
     }
     /* デバイスの検索結果を保存する */
     search_devices_record_result(search, dev->id, can_fence);
@@ -1778,12 +1781,14 @@ check_alternate_host(const char *target)
             crm_trace("Checking for %s.%d != %s", entry->uname, entry->id, target);
             if (fencing_peer_active(entry)
                 && safe_str_neq(entry->uname, target)) {
-				/* 認識しているノード名とSTONITH対象が一致して、ノードがactiveな場合は、ノードをセットする */
+				/* 認識しているノード名とSTONITH対象が一致していない場合で、ノードがactiveな場合は、ノードをセットする */
+				/* --- 自ノードのSTONITHなので、自ノード以外のノードを優先する --- */
                 alternate_host = entry->uname;
                 break;
             }
         }
         if (alternate_host == NULL) {
+			/* 自ノードのstontihノードが決定出来ない場合はログ */
             crm_err("No alternate host available to handle complex self fencing request");
             g_hash_table_iter_init(&gIter, crm_peer_cache);
             while (g_hash_table_iter_next(&gIter, NULL, (void **)&entry)) {
@@ -1916,6 +1921,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
             rc = stonith_manual_ack(request, rop);
 
         } else {
+			/* 自ノードcrmd(DCノードのtengine)クライアント・・・もしくは・・・・ */
             const char *alternate_host = NULL;
             xmlNode *dev = get_xpath_object("//@" F_STONITH_TARGET, request, LOG_TRACE);
             const char *target = crm_element_value(dev, F_STONITH_TARGET);
@@ -1940,7 +1946,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
                            remote_peer, action, target, device ? device : "(any)");
             }
 			/* STONITH対象(自ノード)をSTONITH可能なノードでactiveなノードをfencing_topologyとcrmdの認識ノードからを検索する */
-			/* 自ノード以外に関しては、alternate_hostはNULLとなる */
+			/* STONITH対象が自ノード以外に関しては、alternate_hostはNULLとなる */
             alternate_host = check_alternate_host(target);
 
             if (alternate_host && client) {
