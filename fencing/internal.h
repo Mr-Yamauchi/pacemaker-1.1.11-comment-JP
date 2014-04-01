@@ -11,15 +11,15 @@
  * \retval TRUE, fencing operation took place in the last 'tolerance' number of seconds.
  */
 gboolean stonith_check_fence_tolerance(int tolerance, const char *target, const char *action);
-
+/* デバイス(stonithリソース)情報 */
 typedef struct stonith_device_s {
-    char *id;
-    char *agent;
+    char *id;							/* リソースid */
+    char *agent;						/* 実行エージェント名 */
     char *namespace;
 
     /*! list of actions that must execute on the target node. Used for unfencing */
     char *on_target_actions;
-    GListPtr targets;
+    GListPtr targets;					/* dynamic_listの場合は、STONITHリソースのパラメータに設定されたhost_list */
     time_t targets_age;
     gboolean has_attr_map;
     /* should nodeid parameter for victim be included in agent arguments */
@@ -35,12 +35,13 @@ typedef struct stonith_device_s {
 
     /*! A verified device is one that has contacted the
      * agent successfully to perform a monitor operation */
-    gboolean verified;
+    gboolean verified;					/* デバイスの"list","monitor","status"が実行済の場合は、TRUE */
+    									/* 未実行、デバイスが削除された場合などはFALSE */
 
     gboolean cib_registered;
     gboolean api_registered;
 } stonith_device_t;
-
+/* フェンシング情報 */
 typedef struct remote_fencing_op_s {
     /* The unique id associated with this operation */
     char *id;
@@ -59,7 +60,7 @@ typedef struct remote_fencing_op_s {
     /*! The number of query replies expected */
     guint replies_expected;
     /*! Does this node own control of this operation */
-    gboolean owner;
+    gboolean owner;							/* 自ノードがSTONITHのOWNERの場合TRUE、その他はFALSE */
     /*! After query is complete, This the high level timer that expires the entire operation */
     guint op_timer_total;
     /*! This timer expires the current fencing request. Many fencing
@@ -114,7 +115,7 @@ typedef struct remote_fencing_op_s {
     GListPtr duplicates;
 
 } remote_fencing_op_t;
-
+/* fencing_topology情報 */
 typedef struct stonith_topology_s {
     char *node;
     GListPtr levels[ST_LEVEL_MAX];

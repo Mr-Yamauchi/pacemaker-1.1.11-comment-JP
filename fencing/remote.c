@@ -130,7 +130,7 @@ free_remote_op(gpointer data)
     }
     free(op);
 }
-
+/* STONITH完了 xmlメッセージの作成 */
 static xmlNode *
 create_op_done_notify(remote_fencing_op_t * op, int rc)
 {
@@ -154,7 +154,7 @@ bcast_result_to_peers(remote_fencing_op_t * op, int rc)
 {
     static int count = 0;
     xmlNode *bcast = create_xml_node(NULL, T_STONITH_REPLY);
-    xmlNode *notify_data = create_op_done_notify(op, rc);
+    xmlNode *notify_data = create_op_done_notify(op, rc);	/* STONITH完了 xmlメッセージの作成 */
 
     count++;
     crm_trace("Broadcasting result to peers");
@@ -169,7 +169,7 @@ bcast_result_to_peers(remote_fencing_op_t * op, int rc)
 
     return;
 }
-
+/* STONITH完了の応答と完了のNOTIFY */
 static void
 handle_local_reply_and_notify(remote_fencing_op_t * op, xmlNode * data, int rc)
 {
@@ -182,7 +182,7 @@ handle_local_reply_and_notify(remote_fencing_op_t * op, xmlNode * data, int rc)
     }
 
     /* Do notification with a clean data object */
-    notify_data = create_op_done_notify(op, rc);
+    notify_data = create_op_done_notify(op, rc);		/* STONITH完了 xmlメッセージの作成 */
     crm_xml_add_int(data, "state", op->state);
     crm_xml_add(data, F_STONITH_TARGET, op->target);
     crm_xml_add(data, F_STONITH_OPERATION, op->action);
@@ -295,7 +295,7 @@ remote_op_done(remote_fencing_op_t * op, xmlNode * data, int rc, int dup)
                "Operation %s of %s by %s for %s@%s.%.8s: %s",
                op->action, op->target, op->delegate ? op->delegate : "<no-one>",
                op->client_name, op->originator, op->id, pcmk_strerror(rc));
-
+	/* STONITH完了の応答と完了のNOTIFY */
     handle_local_reply_and_notify(op, data, rc);
 
     if (dup == FALSE) {
@@ -738,7 +738,7 @@ enum find_best_peer_options {
     /*! Skip peers and devices that are not verified */
     FIND_PEER_VERIFIED_ONLY = 0x0004,
 };
-/* もっとも最適なSTONITHの実行ノードを決定する */
+/* 到着しているQUERY結果からもっとも最適なSTONITHの実行ノードを決定する */
 static st_query_result_t *
 find_best_peer(const char *device, remote_fencing_op_t * op, enum find_best_peer_options options)
 {
@@ -747,6 +747,7 @@ find_best_peer(const char *device, remote_fencing_op_t * op, enum find_best_peer
     gboolean verified_devices_only = (options & FIND_PEER_VERIFIED_ONLY) ? TRUE : FALSE;
 
     if (!device && is_set(op->call_options, st_opt_topology)) {
+		/* すべてのtopologyを処理した場合はNULL返却で処理しない */
         return NULL;
     }
 	/* 対象のQUERY応答の積み上げ結果をすべて処理する */
@@ -770,12 +771,31 @@ find_best_peer(const char *device, remote_fencing_op_t * op, enum find_best_peer
             GListPtr match = NULL;
 
             if (verified_devices_only && !g_hash_table_lookup(peer->verified_devices, device)) {
-				/* VERYFYのみで...VERYFIデバイス(存在確認済)に存在しない場合は処理しな */
+				/* VERYFYのみで...QUERY応答のVERYFIデバイス(存在確認済)に存在しない場合は処理しな */
+				/* 例: node1 : stnonit2-1, stonith2-2起動  (node2用のstonith)
+				       node2 : stonith1-1, stonith1-2起動  (node1用のstonith)
+				       topology設定を間違えて....
+				         node1 : stonith2-1, stonith2-2
+				         node2 : stonith1-1, stonith1-2
+                       node1故障では、topologyは
+                         node1 : stonith2-1, stonith2-2
+                           だが、
+                         QUERY応答は、
+                           node1: 0件
+                           node2: stonith1-1,stonith1-2
+                         となり
+                           node2の応答で、verfied_devicesは、stonith1-1,stonith1-2
+                           となる為、
+                         node1用のtopology node1 : stonith2-1, stonith2-2は両方ともマッチしない
+                */
+                       				         
                 continue;
             }
 			/* QUERY結果のデバイスとtopologyデータとのマッチング */
             match = g_list_find_custom(peer->device_list, device, sort_strings);
             if (match) {
+				/* QUERY結果がtopologyデータに見つかった場合は */
+				/* QUERY結果から見つかったデバイスを削除して、検索対象としたQUERY結果を返す */
                 crm_trace("Removing %s from %s (%d remaining)", (char *)match->data, peer->host,
                           g_list_length(peer->device_list));
                 peer->device_list = g_list_remove(peer->device_list, match->data);
@@ -808,9 +828,11 @@ stonith_choose_peer(remote_fencing_op_t * op)
 
     do {
         if (op->devices) {
+			/* fencing_topologyがある場合 */
             device = op->devices->data;
             crm_trace("Checking for someone to fence %s with %s", op->target, device);
         } else {
+			/*fencing_topologyがない場合 */
             crm_trace("Checking for someone to fence %s", op->target);
         }
 		/* もっとも最適なSTONITHの実行ノードを決定する */
@@ -954,6 +976,7 @@ report_timeout_period(remote_fencing_op_t * op, int op_timeout)
     }
 
     /* The client is connected to another node, relay this update to them */
+    /* タイムアウト更新メッセージの送信 */
     update = stonith_create_op(op->client_callid, op->id, STONITH_OP_TIMEOUT_UPDATE, NULL, 0);
     crm_xml_add(update, F_STONITH_REMOTE_OP_ID, op->id);
     crm_xml_add(update, F_STONITH_CLIENTID, client_id);
@@ -980,7 +1003,7 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
 
     crm_trace("State for %s.%.8s: %s %d", op->target, op->client_name, op->id, op->state);
     if (peer == NULL && !is_set(op->call_options, st_opt_topology)) {
-        /* stonithを実行させるノードが決定していない場合(peer)は、stonithを実行させるノードを決定する */
+        /* QUERY応答が設定されていない場合でtopology設定でない場合は、stonithを実行させるノードを決定する */
         peer = stonith_choose_peer(op);
     }
 
@@ -1001,7 +1024,7 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
          * the peer from the op's query results.  Make sure to calculate
          * the op_timeout before calling this function when topology is in use */
          
-        /* topologyの設定されているstonithでデバイスが決定している場合は、*/
+        /* topologyの設定されているデバイスが決定している場合は、*/
         /* stonithを実行させるノードを決定する */
         peer = stonith_choose_peer(op);
         device = op->devices->data;
@@ -1022,6 +1045,7 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
         crm_xml_add_int(query, F_STONITH_TIMEOUT, timeout);
 
         if (device) {
+			/* fencing_topologyからの実行の場合 */
             timeout_one =
                 TIMEOUT_MULTIPLY_FACTOR * get_device_timeout(peer, device, op->base_timeout);
             crm_info("Requesting that %s perform op %s %s with %s for %s (%ds)", peer->host,
@@ -1030,6 +1054,7 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
             crm_xml_add(query, F_STONITH_MODE, "slave");
 
         } else {
+			/* 通常の実行の場合 */
             timeout_one = TIMEOUT_MULTIPLY_FACTOR * get_peer_timeout(peer, op->base_timeout);
             crm_info("Requesting that %s perform op %s %s for %s (%ds)",
                      peer->host, op->action, op->target, op->client_name, timeout_one);
@@ -1186,7 +1211,7 @@ process_remote_stonith_query(xmlNode * msg)
         /* If we're doing 'known' then we might need to fire anyway */
         crm_trace("Query result from %s (%d devices)", host, devices);
         if(op->state == st_query && (op->replies >= op->replies_expected || op->replies >= active)) {
-			/* QUERY応答が、応答必要数まで達したか？応答数がFENCING可能なノード数を超えた場合 */
+			/* QUERY応答が、応答必要数（QUERY要求作成時のアクティブなノード数）まで達したか？応答数がFENCING可能なノード数を超えた場合 */
             crm_info("All queries have arrived, continuing (%d, %d, %d) ", op->replies_expected, active, op->replies);
             /* STONITH対象を決定してSTONITHを依頼 */
             call_remote_stonith(op, NULL);
@@ -1208,6 +1233,7 @@ process_remote_stonith_query(xmlNode * msg)
     }
 	/* 応答受信のログ出力 */
     crm_info("Query result %d of %d from %s (%d devices)", op->replies, op->replies_expected, host, devices);
+    /* 応答データの作成 */
     result = calloc(1, sizeof(st_query_result_t));
     result->host = strdup(host);
     result->devices = devices;
@@ -1224,12 +1250,14 @@ process_remote_stonith_query(xmlNode * msg)
             crm_element_value_int(child, F_STONITH_ACTION_TIMEOUT, &action_timeout);
             crm_element_value_int(child, F_STONITH_DEVICE_VERIFIED, &verified);
             if (action_timeout) {
+				/* アクションタイムアウトを持つデバイスの場合は、custom_action_timeoutsリストにもセットする */
                 crm_trace("Peer %s with device %s returned action timeout %d",
                           result->host, device, action_timeout);
                 g_hash_table_insert(result->custom_action_timeouts,
                                     strdup(device), GINT_TO_POINTER(action_timeout));
             }
             if (verified) {
+				/* 稼働確認済のデバイスの場合は、verified_devicesリストにもセットする */
                 crm_trace("Peer %s has confirmed a verified device %s", result->host, device);
                 g_hash_table_insert(result->verified_devices,
                                     strdup(device), GINT_TO_POINTER(verified));
@@ -1262,6 +1290,7 @@ process_remote_stonith_query(xmlNode * msg)
     } else if (op->state == st_query) {
         /* We have a result for a non-topology fencing op that looks promising,
          * go ahead and start fencing before query timeout */
+		/* fencing_topologyからの処理ではない場合(fencing_topology無の構成) */
         if (host_is_target == FALSE && g_hash_table_size(result->verified_devices)) {
             /* we have a verified device living on a peer that is not the target */
             crm_trace("Found %d verified devices", g_hash_table_size(result->verified_devices));
@@ -1288,7 +1317,7 @@ process_remote_stonith_query(xmlNode * msg)
 
     return pcmk_ok;
 }
-/* STONITH_OP_FENCE応答メッセージ(STONITH完了メッセージ) */
+/* STONITH_OP_FENCE・T_STONITH_NOTIFY応答メッセージ(STONITH完了メッセージ) */
 int
 process_remote_stonith_exec(xmlNode * msg)
 {
@@ -1311,6 +1340,7 @@ process_remote_stonith_exec(xmlNode * msg)
     device = crm_element_value(dev, F_STONITH_DEVICE);
 
     if (remote_op_list) {
+		/* このノードでの実行リストから完了したオペレーションを検索する */
         op = g_hash_table_lookup(remote_op_list, id);
     }
 
@@ -1356,7 +1386,7 @@ process_remote_stonith_exec(xmlNode * msg)
     }
 
     if (is_set(op->call_options, st_opt_topology)) {
-		/* fencing_topologyを処理中のSTONITH完了応答、NOTIFYお場合 */
+		/* fencing_topologyを処理中のSTONITH完了応答、NOTIFYの場合 */
         const char *device = crm_element_value(msg, F_STONITH_DEVICE);
 
         crm_notice("Call to %s for %s on behalf of %s@%s: %s (%d)",
@@ -1392,6 +1422,7 @@ process_remote_stonith_exec(xmlNode * msg)
             /* This device failed, time to try another topology level. If no other
              * levels are available, mark this operation as failed and report results. */
             if (stonith_topology_next(op) != pcmk_ok) {
+				/* topologyからの実行が失敗して、次のtopologyのデバイスが無いならエラーで終了 */
                 op->state = st_failed;
                 remote_op_done(op, msg, rc, FALSE);
                 return rc;

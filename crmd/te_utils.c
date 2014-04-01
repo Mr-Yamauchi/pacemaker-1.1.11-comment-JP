@@ -154,9 +154,10 @@ tengine_stonith_notify(stonith_t * st, stonith_event_t * st_event)
         exit(100); /* None of our wrappers since we already called qb_log_fini() */
         return;
     }
-
+	/* stonithからのFENCE完了のNOTIFY受信 */
     if (st_event->result == pcmk_ok &&
         safe_str_eq(st_event->operation, T_STONITH_NOTIFY_FENCE)) {
+        /* stonithの故障情報をリセット */
         st_fail_count_reset(st_event->target);
     }
 
@@ -195,6 +196,7 @@ tengine_stonith_notify(stonith_t * st, stonith_event_t * st_event)
         crm_trace("target=%s dc=%s", st_event->target, fsa_our_dc);
         if(AM_I_DC) {
             /* The DC always sends updates */
+            /* fence完了したノードのcibなどの情報を更新 */
             send_stonith_update(NULL, st_event->target, uuid);
 
             if (st_event->client_origin && safe_str_neq(st_event->client_origin, te_client_id)) {

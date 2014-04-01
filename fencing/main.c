@@ -356,7 +356,7 @@ do_stonith_async_timeout_update(const char *client_id, const char *call_id, int 
 
     free_xml(notify_data);
 }
-
+/* 接続クライアントにNOTIFYメッセージを送信する */
 void
 do_stonith_notify(int options, const char *type, int result, xmlNode * data)
 {
@@ -431,7 +431,7 @@ topology_remove_helper(const char *node, int level)
 
     crm_xml_add(notify_data, F_STONITH_DEVICE, desc);
     crm_xml_add_int(notify_data, F_STONITH_ACTIVE, g_hash_table_size(topology));
-
+	/* fencing_toplogy levelの削除NOTIFYを送信 */
     do_stonith_notify(0, STONITH_OP_LEVEL_DEL, rc, notify_data);
 
     free_xml(notify_data);
@@ -456,7 +456,7 @@ topology_register_helper(const char *node, int level, stonith_key_value_t * devi
 	/* NOTIFY用のst_level_addデータにデータを積み上げる */
     crm_xml_add(notify_data, F_STONITH_DEVICE, desc);
     crm_xml_add_int(notify_data, F_STONITH_ACTIVE, g_hash_table_size(topology));
-	/* NOTIFYを送信 */
+	/* fencing_toplogy levelの登録NOTIFYを送信 */
     do_stonith_notify(0, STONITH_OP_LEVEL_ADD, rc, notify_data);
 
     free_xml(notify_data);
