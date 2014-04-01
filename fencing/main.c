@@ -220,7 +220,7 @@ stonith_peer_ais_callback(cpg_handle_t handle,
             free(data);
             return;
         }
-        /* 受信元をF_ORIGにセット */
+        /* 送信元をF_ORIGにセット */
         crm_xml_add(xml, F_ORIG, from);
         /* crm_xml_add_int(xml, F_SEQ, wrapper->id); */
         stonith_peer_callback(xml, NULL);
