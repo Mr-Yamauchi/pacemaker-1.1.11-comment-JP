@@ -423,7 +423,7 @@ stonith_topology_next(remote_fencing_op_t * op)
         /* Queries don't have a target set */
         /* fencing_topologyの展開ハッシュテーブルからSTONITH対象ノードを検索する */
         tp = g_hash_table_lookup(topology, op->target);
-    }
+    } 
     if (topology_is_empty(tp)) {
 		/* 対象ホスト用のtopologyにlevel(index)が存在しない場合 */
         return pcmk_ok;

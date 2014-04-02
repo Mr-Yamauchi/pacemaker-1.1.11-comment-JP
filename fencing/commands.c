@@ -1835,7 +1835,8 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
     xmlNode *reply = NULL;
 
     char *output = NULL;
-    const char *op = crm_element_value(request, F_STONITH_OPERATION);
+    /* OPERATION,CLIENTIDを要求メッセージから取得 */
+    const char *op = crm_element_value(request, F_STONITH_OPERATION);		
     const char *client_id = crm_element_value(request, F_STONITH_CLIENTID);
 
     crm_element_value_int(request, F_STONITH_CALLOPTS, &call_options);
@@ -1850,6 +1851,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
         CRM_ASSERT(client);
         crm_xml_add(reply, F_STONITH_OPERATION, CRM_OP_REGISTER);
         crm_xml_add(reply, F_STONITH_CLIENTID, client->id);
+        /* 応答のみクライアントに送信 */
         crm_ipcs_send(client, id, reply, flags);
         client->request_id = 0;
         free_xml(reply);
