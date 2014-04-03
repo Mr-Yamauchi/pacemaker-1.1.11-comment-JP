@@ -500,7 +500,7 @@ native_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
                      constraint->score, role2text(constraint->role_lh));
         if (constraint->role_lh >= RSC_ROLE_MASTER
             || (constraint->score < 0 && constraint->score > -INFINITY)) {
-			/* with-rscのroleがMASTERか、スコアが0以下の-INFINITY以外の値の場合は*/
+			/* rsc指定がrole:MASTERか、スコアが0以下の-INFINITY以外の値の場合は*/
 			/* リソースの配置候補を一旦退避 */
             archive = node_hash_dup(rsc->allowed_nodes);
         }
