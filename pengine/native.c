@@ -244,18 +244,21 @@ node_list_attr_score(GHashTable * list, const char *attr, const char *value)
     if (attr == NULL) {
         attr = "#" XML_ATTR_UNAME;
     }
-
+	/* リストをすべて処理する */
     g_hash_table_iter_init(&iter, list);
     while (g_hash_table_iter_next(&iter, NULL, (void **)&node)) {
-        int weight = node->weight;
+        int weight = node->weight;		/* weightにノードの重みをセット */
 
         if (can_run_resources(node) == FALSE) {
+			/* 対象ノードでリソースが起動可能でない場合(スコアではなく、onlineなどの状態のみで判定)は-INFINTYをセット */
             weight = -INFINITY;
         }
         if (weight > best_score || best_node == NULL) {
+			/* 対象ノードの属性でuname検索 */
             const char *tmp = g_hash_table_lookup(node->details->attrs, attr);
 
             if (safe_str_eq(value, tmp)) {
+				/* パラメータとuname属性が一致したら、スコアとノードをセット */
                 best_score = weight;
                 best_node = node->details->uname;
             }
@@ -266,7 +269,7 @@ node_list_attr_score(GHashTable * list, const char *attr, const char *value)
         crm_info("Best score for %s=%s was %s with %d",
                  attr, value, best_node ? best_node : "<none>", best_score);
     }
-
+	/* スコアを返却 */
     return best_score;
 }
 
@@ -282,10 +285,11 @@ node_hash_update(GHashTable * list1, GHashTable * list2, const char *attr, float
     if (attr == NULL) {
         attr = "#" XML_ATTR_UNAME;
     }
-
+	/* list1のノード情報をすべて処理 */
     g_hash_table_iter_init(&iter, list1);
     while (g_hash_table_iter_next(&iter, NULL, (void **)&node)) {
         CRM_CHECK(node != NULL, continue);
+        /* list2からlist1と同一 */
         score = node_list_attr_score(list2, attr, g_hash_table_lookup(node->details->attrs, attr));
         new_score = merge_weights(factor * score, node->weight);
 
@@ -496,7 +500,8 @@ native_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
                      constraint->score, role2text(constraint->role_lh));
         if (constraint->role_lh >= RSC_ROLE_MASTER
             || (constraint->score < 0 && constraint->score > -INFINITY)) {
-			/* 
+			/* with-rscのroleがMASTERか、スコアが0以下の-INFINITY以外の値の場合は*/
+			/* リソースの配置候補を一旦退避 */
             archive = node_hash_dup(rsc->allowed_nodes);
         }
         /* このリソースがwith-rsc指定しているリソースの配置を先に決定する */
@@ -504,6 +509,8 @@ native_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
         /* colocation情報のwith-rsc指定のリソースの配置の配置情報を対象リソースに反映する */
         rsc->cmds->rsc_colocation_lh(rsc, rsc_rh, constraint);
         if (archive && can_run_any(rsc->allowed_nodes) == FALSE) {
+			/* role:Master付きか、マイナス値のcolocationの場合で、with-rscリソース側のスコアを反映した結果 */
+			/* 配置先がない場合は、退避の配置先に戻す */
             pe_rsc_info(rsc, "%s: Rolling back scores from %s", rsc->id, rsc_rh->id);
             g_hash_table_destroy(rsc->allowed_nodes);
             rsc->allowed_nodes = archive;
