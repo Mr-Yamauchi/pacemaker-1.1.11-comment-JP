@@ -458,21 +458,23 @@ append_parent_colocation(resource_t * rsc, resource_t * child, gboolean all)
 {
 
     GListPtr gIter = NULL;
-
+	//親リソースがwith-rsc指定しているcolocationの子リソースへの反映
     gIter = rsc->rsc_cons;
     for (; gIter != NULL; gIter = gIter->next) {
         rsc_colocation_t *cons = (rsc_colocation_t *) gIter->data;
 
         if (all || cons->score < 0 || cons->score == INFINITY) {
+			//ノード数がclone_max数を超えた場合か、負数、INFINITY値の場合は適用
             child->rsc_cons = g_list_prepend(child->rsc_cons, cons);
         }
     }
-
+	//親リソースがwith-rsc指定されているcolocationの子リソースへの反映
     gIter = rsc->rsc_cons_lhs;
     for (; gIter != NULL; gIter = gIter->next) {
         rsc_colocation_t *cons = (rsc_colocation_t *) gIter->data;
 
         if (all || cons->score < 0) {
+			//ノード数がclone_max数を超えた場合か、負数の場合は適用
             child->rsc_cons_lhs = g_list_prepend(child->rsc_cons_lhs, cons);
         }
     }
@@ -1012,10 +1014,10 @@ clone_rsc_colocation_lh(resource_t * rsc_lh, resource_t * rsc_rh, rsc_colocation
     CRM_CHECK(FALSE, crm_err("This functionality is not thought to be used. Please report a bug."));
     CRM_CHECK(rsc_lh, return);
     CRM_CHECK(rsc_rh, return);
-
+	/* すべての子リソースを処理する */
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *child_rsc = (resource_t *) gIter->data;
-
+		/* 子リソースとwith-rscリソース間のcolocationを処理する */
         child_rsc->cmds->rsc_colocation_lh(child_rsc, rsc_rh, constraint);
     }
 

@@ -1416,11 +1416,14 @@ filter_colocation_constraint(resource_t * rsc_lh, resource_t * rsc_rh,
 {
     if (constraint->score == 0) {
 		/* スコアが0 */
+		/* 反映しない */
         return influence_nothing;
     }
 
     /* rh side must be allocated before we can process constraint */
     if (is_set(rsc_rh->flags, pe_rsc_provisional)) {
+		/* with-rscリソース側が配置処理中 */
+		/* 反映しない */
         return influence_nothing;
     }
 
@@ -1430,10 +1433,14 @@ filter_colocation_constraint(resource_t * rsc_lh, resource_t * rsc_rh,
 
         /* LH and RH resources have already been allocated, place the correct
          * priority oh LH rsc for the given multistate resource role */
+        /* rsc_lhリソースの親がM/Sリソースで、colocationのrsc指定リソースのROLE指定がMASTERで、*/
+        /* rsc_lhリソース側が配置処理を完了している */
+        /* rsc_lhリソースのpriorityに反映する:★スコアには反映されない */
         return influence_rsc_priority;
     }
 
     if (is_not_set(rsc_lh->flags, pe_rsc_provisional)) {
+		/* rsc_lhリソース側が配置処理を完了している */
         /* error check */
         struct node_shared_s *details_lh;
         struct node_shared_s *details_rh;
@@ -1456,37 +1463,45 @@ filter_colocation_constraint(resource_t * rsc_lh, resource_t * rsc_rh,
                     " but to the SAME node: %s",
                     rsc_lh->id, rsc_rh->id, details_rh ? details_rh->uname : "n/a");
         }
-
+		/* 反映しない */
         return influence_nothing;
     }
-
+    /* rsc_lhリソース側が配置処理を完了していない */
     if (constraint->score > 0
         && constraint->role_lh != RSC_ROLE_UNKNOWN && constraint->role_lh != rsc_lh->next_role) {
+		/* スコア指定があって、colocationのrsc指定にROLE指定があって、rsc_lhリソースの次のroleとcolocationのroleが一致しないなら処理しない */
         crm_trace("LH: Skipping constraint: \"%s\" state filter nextrole is %s",
                   role2text(constraint->role_lh), role2text(rsc_lh->next_role));
+		/* 反映しない */
         return influence_nothing;
     }
 
     if (constraint->score > 0
         && constraint->role_rh != RSC_ROLE_UNKNOWN && constraint->role_rh != rsc_rh->next_role) {
+		/* スコア指定があって、colocationのwith-rsc指定にROLE指定があって、role_rhリソースの次のroleとcolocationのroleが一致しないなら処理しない */
         crm_trace("RH: Skipping constraint: \"%s\" state filter", role2text(constraint->role_rh));
+		/* 反映しない */
         return FALSE;
     }
 
     if (constraint->score < 0
         && constraint->role_lh != RSC_ROLE_UNKNOWN && constraint->role_lh == rsc_lh->next_role) {
+		/* スコア指定があって、colocationのrsc指定にROLE指定があって、rsc_lhリソースの次のroleとcolocationのroleが一致しないなら処理しない */
         crm_trace("LH: Skipping -ve constraint: \"%s\" state filter",
                   role2text(constraint->role_lh));
+		/* 反映しない */
         return influence_nothing;
     }
 
     if (constraint->score < 0
         && constraint->role_rh != RSC_ROLE_UNKNOWN && constraint->role_rh == rsc_rh->next_role) {
+		/* スコア指定があって、colocationのwith-rsc指定にROLE指定があって、role_rhリソースの次のroleとcolocationのroleが一致しないなら処理しない */
         crm_trace("RH: Skipping -ve constraint: \"%s\" state filter",
                   role2text(constraint->role_rh));
+		/* 反映しない */
         return influence_nothing;
     }
-
+	/* colocation設定をlocationに反映する */
     return influence_rsc_location;
 }
 
@@ -1510,6 +1525,7 @@ influence_priority(resource_t * rsc_lh, resource_t * rsc_rh, rsc_colocation_t * 
     rh_value = g_hash_table_lookup(rsc_rh->allocated_to->details->attrs, attribute);
 
     if (!safe_str_eq(lh_value, rh_value)) {
+		/* rsc_lhリソースとrsc_rhリソースの配置ノードが一致しない場合は処理しない */
         return;
     }
 
@@ -1609,11 +1625,12 @@ void
 native_rsc_colocation_rh(resource_t * rsc_lh, resource_t * rsc_rh, rsc_colocation_t * constraint)
 {
     enum filter_colocation_res filter_results;
-
+	/* colocationの適用方法を判定する */
     filter_results = filter_colocation_constraint(rsc_lh, rsc_rh, constraint);
 
     switch (filter_results) {
         case influence_rsc_priority:
+        	/* rsh_lhリソースのpriorityのみにcolocationを反映して、配置候補には反映しない */
             influence_priority(rsc_lh, rsc_rh, constraint);
             break;
         case influence_rsc_location:

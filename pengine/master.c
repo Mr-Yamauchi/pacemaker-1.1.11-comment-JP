@@ -747,7 +747,7 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
          この時点で子リソースのpriorityにはlocation制約のrole:Masterのスコアが加算されている
          ------
         */
-		/* 子リソースがwith-rsc指定されているcolocation情報のリストを処理する */
+		/* 子リソースがwith-rsc指定しているcolocation情報のリストを処理する */
         gIter2 = child_rsc->rsc_cons;
         for (; gIter2 != NULL; gIter2 = gIter2->next) {
             rsc_colocation_t *cons = (rsc_colocation_t *) gIter2->data;
