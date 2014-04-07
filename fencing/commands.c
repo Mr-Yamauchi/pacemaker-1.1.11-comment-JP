@@ -1382,7 +1382,7 @@ stonith_send_async_reply(async_command_t * cmd, const char *output, int rc, GPid
 {
     xmlNode *reply = NULL;
     gboolean bcast = FALSE;
-
+	/* 非同期応答メッセージ(固定部)の生成 */
     reply = stonith_construct_async_reply(cmd, output, NULL, rc);
 
     if (safe_str_eq(cmd->action, "metadata")) {
@@ -1722,7 +1722,7 @@ stonith_construct_reply(xmlNode * request, const char *output, xmlNode * data, i
     }
     return reply;
 }
-
+/* 非同期応答メッセージ(固定部)の生成 */
 static xmlNode *
 stonith_construct_async_reply(async_command_t * cmd, const char *output, xmlNode * data, int rc)
 {
@@ -1751,7 +1751,7 @@ stonith_construct_async_reply(async_command_t * cmd, const char *output, xmlNode
 
     if (data != NULL) {
         crm_info("Attaching reply output");
-        add_message_xml(reply, F_STONITH_CALLDATA, data);
+        add_message_xml(reply, F_STONITH_CALLDATA, data);	/* 応答メッセージへの付属データのセット */
     }
     return reply;
 }
@@ -1846,6 +1846,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
     }
 
     if (crm_str_eq(op, CRM_OP_REGISTER, TRUE)) {
+		/* クライアント・プロセスからの接続登録メッセージ */
         xmlNode *reply = create_xml_node(NULL, "reply");
 
         CRM_ASSERT(client);
@@ -1992,6 +1993,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
         }
 
     } else if (crm_str_eq(op, STONITH_OP_FENCE_HISTORY, TRUE)) {
+		/* 履歴要求(STONITH_OP_FENCE_HISTORY)メッセージの場合 */
         rc = stonith_fence_history(request, &data);
 
     } else if (crm_str_eq(op, STONITH_OP_DEVICE_ADD, TRUE)) {
@@ -2050,6 +2052,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
     } else if (crm_str_eq(op, STONITH_OP_CONFIRM, TRUE)) {
 		/* STONITH 実行非同期コマンドの作成 */
         async_command_t *cmd = create_async_command(request);
+        /* 非同期応答メッセージ(固定部)の生成 */
         xmlNode *reply = stonith_construct_async_reply(cmd, NULL, NULL, 0);
 
         crm_xml_add(reply, F_STONITH_OPERATION, T_STONITH_NOTIFY);

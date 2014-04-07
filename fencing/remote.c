@@ -1442,15 +1442,16 @@ process_remote_stonith_exec(xmlNode * msg)
     call_remote_stonith(op, NULL);
     return rc;
 }
-
+/* 履歴要求(STONITH_OP_FENCE_HISTORY)メッセージ処理 */
 int
 stonith_fence_history(xmlNode * msg, xmlNode ** output)
 {
     int rc = 0;
     const char *target = NULL;
+    /* 要求メッセージのtargetを取り出す */
     xmlNode *dev = get_xpath_object("//@" F_STONITH_TARGET, msg, LOG_TRACE);
 
-    if (dev) {
+    if (dev) {	/* targetが指定されている場合 */
         int options = 0;
 
         target = crm_element_value(dev, F_STONITH_TARGET);
@@ -1466,12 +1467,12 @@ stonith_fence_history(xmlNode * msg, xmlNode ** output)
     }
 
     crm_trace("Looking for operations on %s in %p", target, remote_op_list);
-
+	/* 履歴を生成する */
     *output = create_xml_node(NULL, F_STONITH_HISTORY_LIST);
     if (remote_op_list) {
         GHashTableIter iter;
         remote_fencing_op_t *op = NULL;
-
+		/* リモートStonith操作情報から履歴応答を積み上げる */
         g_hash_table_iter_init(&iter, remote_op_list);
         while (g_hash_table_iter_next(&iter, NULL, (void **)&op)) {
             xmlNode *entry = NULL;

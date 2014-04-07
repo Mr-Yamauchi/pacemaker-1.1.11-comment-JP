@@ -62,6 +62,7 @@ typedef struct pcmk_child_s {
 #define pcmk_child_crmd  4
 #define pcmk_child_mgmtd 8
 /* *INDENT-OFF* */
+/* pacemakerd管理のpacemaker子プロセス */
 static pcmk_child_t pcmk_children[] = {
     { 0, crm_proc_none,       0, 0, FALSE, "none",       NULL,            NULL },
     { 0, crm_proc_plugin,     0, 0, FALSE, "ais",        NULL,            NULL },
@@ -391,7 +392,7 @@ pcmk_shutdown_worker(gpointer user_data)
                 if (child->respawn) {
                     next_log = now + 30;
                     child->respawn = FALSE;
-                    stop_child(child, SIGTERM);
+                    stop_child(child, SIGTERM);	/* 管理プロセスの停止 */
                     if (phase < pcmk_children[pcmk_child_crmd].start_seq) {
                         g_timeout_add(180000 /* 3m */ , escalate_shutdown, child);
                     }
@@ -758,6 +759,7 @@ init_children_processes(void)
             }
 
             if (start_seq == pcmk_children[lpc].start_seq) {
+				/* pacemaker関連プロセスの起動 */
                 start_child(&(pcmk_children[lpc]));
             }
         }
