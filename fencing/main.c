@@ -88,6 +88,7 @@ st_ipc_created(qb_ipcs_connection_t * c)
 }
 
 /* Exit code means? */
+/* IPC通信処理 */
 static int32_t
 st_ipc_dispatch(qb_ipcs_connection_t * qbc, void *data, size_t size)
 {
@@ -131,6 +132,7 @@ st_ipc_dispatch(qb_ipcs_connection_t * qbc, void *data, size_t size)
     crm_xml_add(request, F_STONITH_CLIENTNODE, stonith_our_uname);
 
     crm_log_xml_trace(request, "Client[inbound]");
+    /* クライアントからの要求メッセージの処理 */
     stonith_command(c, id, flags, request, NULL);
 
     free_xml(request);
@@ -160,7 +162,7 @@ st_ipc_destroy(qb_ipcs_connection_t * c)
     crm_trace("Connection %p destroyed", c);
     st_ipc_closed(c);
 }
-/* STONITH クラスタ通信コールバック */
+/* STONITH クラスタ通信(CPG)コールバック */
 static void
 stonith_peer_callback(xmlNode * msg, void *private_data)
 {
@@ -200,6 +202,7 @@ stonith_peer_hb_destroy(gpointer user_data)
 #endif
 
 #if SUPPORT_COROSYNC
+/* CPGメッセージのコールバック */
 static void
 stonith_peer_ais_callback(cpg_handle_t handle,
                           const struct cpg_name *groupName,
@@ -270,7 +273,7 @@ do_local_reply(xmlNode * notify_src, const char *client_id, gboolean sync_reply,
             crm_trace("Sending an event to %s %s",
                       client_obj->name, from_peer ? "(originator of delegated request)" : "");
         }
-
+		/* コマンドの依頼元のクライアントにIPCメッセージを応答する */
         local_rc = crm_ipcs_send(client_obj, rid, notify_src, sync_reply?crm_ipc_flags_none:crm_ipc_server_event);
     }
 
@@ -1029,7 +1032,8 @@ struct qb_ipcs_service_handlers ipc_callbacks = {
     .connection_closed = st_ipc_closed,
     .connection_destroyed = st_ipc_destroy
 };
-/* (pokeメッセージ送信) */
+/* クラスタ構成状態のコールバックのセット */
+/* pokeメッセージをクラスタ内のsonith-ngに送信する */
 static void
 st_peer_update_callback(enum crm_status_type type, crm_node_t * node, const void *data)
 {
@@ -1059,7 +1063,7 @@ main(int argc, char **argv)
     int option_index = 0;
     crm_cluster_t cluster;
     const char *actions[] = { "reboot", "off", "list", "monitor", "status" };
-
+	/* ログの初期化とcrm_system_nameへの"stonith-ng"セット */
     crm_log_init("stonith-ng", LOG_INFO, TRUE, FALSE, argc, argv, FALSE);
     crm_set_options(NULL, "mode [options]", long_options,
                     "Provides a summary of cluster's current state."
@@ -1199,7 +1203,7 @@ main(int argc, char **argv)
     }
 
     mainloop_add_signal(SIGTERM, stonith_shutdown);
-
+	/* crm_peer_cache, crm_remote_peer_cache ハッシュテーブルを生成する */
     crm_peer_init();
 
     if (stand_alone == FALSE) {
@@ -1216,7 +1220,7 @@ main(int argc, char **argv)
             cluster.cpg.cpg_confchg_fn = pcmk_cpg_membership;
 #endif
         }
-
+		/* corosync/CPGへの接続 */
         if (crm_cluster_connect(&cluster) == FALSE) {
             crm_crit("Cannot sign in to the cluster... terminating");
             crm_exit(DAEMON_RESPAWN_STOP);
@@ -1231,7 +1235,7 @@ main(int argc, char **argv)
     } else {
         stonith_our_uname = strdup("localhost");
     }
-	
+	/* クラスタ構成状態のコールバックのセット */
     crm_set_status_callback(&st_peer_update_callback);
 	/* デバイスリストの生成 */
     device_list = g_hash_table_new_full(crm_str_hash, g_str_equal, NULL, free_device);

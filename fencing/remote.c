@@ -654,7 +654,7 @@ create_remote_stonith_op(const char *client, xmlNode * request, gboolean peer)
 
     return op;
 }
-/* REMOTE STONITH処理 */
+/* REMOTE STONITH開始処理(QUERY処理の開始) */
 remote_fencing_op_t *
 initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean manual_ack)
 {
@@ -696,6 +696,7 @@ initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean ma
             return op;
 
         case st_duplicate:
+        	/* 重複したstonith操作の場合 */
             crm_info("Initiating remote operation %s for %s: %s (duplicate)", op->action,
                      op->target, op->id);
             return op;
@@ -705,8 +706,10 @@ initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean ma
                        op->id, op->state);
     }
 	/* STONOTHの実行先を決定するために、QUERY(STONITH_OP_QUERY)メッセージを作成する */
+	/* topologyがセットされていても、デバイス自体はQUERY内にはセットされない為、QUERYを受信したノードは */
+	/* target(stonith対象)とactionからリスト応答を生成してくる */
     query = stonith_create_op(op->client_callid, op->id, STONITH_OP_QUERY, NULL, 0);
-
+	/* QUERY(STONITH_OP_QUERY)メッセージに追加情報をセットする */
     crm_xml_add(query, F_STONITH_REMOTE_OP_ID, op->id);
     crm_xml_add(query, F_STONITH_TARGET, op->target);
     crm_xml_add(query, F_STONITH_ACTION, op->action);
@@ -1226,6 +1229,7 @@ process_remote_stonith_query(xmlNode * msg)
             crm_trace("Allowing %s to potentialy fence itself", op->target);
         } else {
 			/* 自殺不可な場合は、処理しない */
+			/* QUERY応答の送信元とSTONITHの対象となるノードが同じ場合にはそのノードはFENCE対象にはならない */
             crm_info("Ignoring reply from %s, hosts are not permitted to commit suicide",
                      op->target);
             return pcmk_ok;
@@ -1366,6 +1370,7 @@ process_remote_stonith_exec(xmlNode * msg)
     }
 
     if (safe_str_eq(crm_element_value(msg, F_SUBTYPE), "broadcast")) {
+		/* broadcast応答を受信した場合 */
         crm_debug("Marking call to %s for %s on behalf of %s@%s.%.8s: %s (%d)",
                   op->action, op->target, op->client_name, op->id, op->originator,
                   pcmk_strerror(rc), rc);
@@ -1419,8 +1424,10 @@ process_remote_stonith_exec(xmlNode * msg)
                 return rc;
             }
         } else {
+			/* fencing_toplogyの実行デバイスでのfencingが失敗した場合 */
             /* This device failed, time to try another topology level. If no other
              * levels are available, mark this operation as failed and report results. */
+             /* 次の実行デバイスをtopologyからセットする */
             if (stonith_topology_next(op) != pcmk_ok) {
 				/* topologyからの実行が失敗して、次のtopologyのデバイスが無いならエラーで終了 */
                 op->state = st_failed;
@@ -1439,6 +1446,7 @@ process_remote_stonith_exec(xmlNode * msg)
     /* Retry on failure or execute the rest of the topology */
     crm_trace("Next for %s on behalf of %s@%s (rc was %d)", op->target, op->originator,
               op->client_name, rc);
+    /* fencing動作をリトライ(STONITHを依頼(STONITH_OP_FENCE)) */
     call_remote_stonith(op, NULL);
     return rc;
 }

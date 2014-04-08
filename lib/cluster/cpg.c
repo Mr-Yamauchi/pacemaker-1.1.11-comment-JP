@@ -419,7 +419,7 @@ pcmk_cpg_membership(cpg_handle_t handle,
 
     counter++;
 }
-
+/* corosync/CPG接続 */
 gboolean
 cluster_connect_cpg(crm_cluster_t *cluster)
 {
@@ -434,7 +434,7 @@ cluster_connect_cpg(crm_cluster_t *cluster)
         .dispatch = pcmk_cpg_dispatch,
         .destroy = cluster->destroy,
     };
-
+	/* メッセージ、構成変更こーるばっくセット */
     cpg_callbacks_t cpg_callbacks = {
         .cpg_deliver_fn = cluster->cpg.cpg_deliver_fn,
         .cpg_confchg_fn = cluster->cpg.cpg_confchg_fn,
@@ -464,20 +464,20 @@ cluster_connect_cpg(crm_cluster_t *cluster)
 
     }
     cluster->nodeid = id;
-
+	/* CPGへJOING */
     retries = 0;
     cs_repeat(retries, 30, rc = cpg_join(handle, &cluster->group));
     if (rc != CS_OK) {
         crm_err("Could not join the CPG group '%s': %d", crm_system_name, rc);
         goto bail;
     }
-
+	/* CPG接続のFD取得 */
     rc = cpg_fd_get(handle, &fd);
     if (rc != CS_OK) {
         crm_err("Could not obtain the CPG API connection: %d\n", rc);
         goto bail;
     }
-
+	/* FDコールバックセット */
     pcmk_cpg_handle = handle;
     cluster->cpg_handle = handle;
     mainloop_add_fd("corosync-cpg", G_PRIORITY_MEDIUM, fd, cluster, &cpg_fd_callbacks);

@@ -175,7 +175,7 @@ stonith_connection_destroy(gpointer user_data)
     g_list_foreach(native->notify_list, stonith_send_notification, &blob);
     free_xml(blob.xml);
 }
-
+/* デバイス登録xmlの生成 */
 xmlNode *
 create_device_registration_xml(const char *id, const char *namespace, const char *agent,
                                stonith_key_value_t * params)
@@ -1490,7 +1490,7 @@ stonithlib_GCompareFunc(gconstpointer a, gconstpointer b)
     }
     return rc;
 }
-
+/* STONITH用のメッセージの固定部を生成する */
 xmlNode *
 stonith_create_op(int call_id, const char *token, const char *op, xmlNode * data, int call_options)
 {

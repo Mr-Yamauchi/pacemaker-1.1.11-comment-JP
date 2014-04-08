@@ -182,7 +182,7 @@ create_async_command(xmlNode * msg)
     CRM_CHECK(cmd->op != NULL, crm_log_xml_warn(msg, "NoOp"); free_async_command(cmd); return NULL);
     CRM_CHECK(cmd->client != NULL, crm_log_xml_warn(msg, "NoClient"));
 
-    cmd->done_cb = st_child_done;			/* stonith実行　子プロセスの完了コールバック */
+    cmd->done_cb = st_child_done;			/* stonith実行子プロセスの完了コールバック */
     cmd_list = g_list_append(cmd_list, cmd);
     return cmd;
 }
@@ -275,8 +275,9 @@ schedule_stonith_command(async_command_t * cmd, stonith_device_t * device)
     }
 
     if (device->include_nodeid && cmd->victim) {
+		/* nodeid判定が必要な場合で、依頼先が設定されていう場合は、依頼先の接続node情報を取得する */
         crm_node_t *node = crm_get_peer(0, cmd->victim);
-
+		/* 取得したnode情報を依頼先のnodeidにセットする */
         cmd->victim_nodeid = node->id;
     }
 
@@ -295,7 +296,7 @@ schedule_stonith_command(async_command_t * cmd, stonith_device_t * device)
     /* トリガーをたたく */
     mainloop_set_trigger(device->work);
 }
-
+/* デバイス情報を解放する */
 void
 free_device(gpointer data)
 {
@@ -331,13 +332,15 @@ build_port_aliases(const char *hostmap, GListPtr * targets)
 {
     char *name = NULL;
     int last = 0, lpc = 0, max = 0, added = 0;
+    /* 別名構築用のハッシュテーブルを生成する */
     GHashTable *aliases =
         g_hash_table_new_full(crm_str_hash, g_str_equal, g_hash_destroy_str, g_hash_destroy_str);
 
     if (hostmap == NULL) {
+		/* パラメータに"pcmk_host_map"が無い場合は、空のハッシュテーブルを戻す */
         return aliases;
     }
-
+	/* パラメータの"pcmk_host_map"の長さを取得する */
     max = strlen(hostmap);
     for (; lpc <= max; lpc++) {
         switch (hostmap[lpc]) {
@@ -345,6 +348,7 @@ build_port_aliases(const char *hostmap, GListPtr * targets)
             case '=':
             case ':':
                 if (lpc > last) {
+            	    /* =,:区切りで別名を作成する */
                     free(name);
                     name = calloc(1, 1 + lpc - last);
                     memcpy(name, hostmap + last, lpc - last);
@@ -359,11 +363,12 @@ build_port_aliases(const char *hostmap, GListPtr * targets)
             case ' ':
             case '\t':
                 if (name) {
+					/* ;,blank,tabで生成した別名を登録する */
                     char *value = NULL;
 
                     value = calloc(1, 1 + lpc - last);
                     memcpy(value, hostmap + last, lpc - last);
-
+					/* 別名構築用のハッシュテーブルに別名を登録する */
                     crm_debug("Adding alias '%s'='%s'", name, value);
                     g_hash_table_replace(aliases, name, value);
                     if (targets) {
@@ -387,9 +392,9 @@ build_port_aliases(const char *hostmap, GListPtr * targets)
     }
 
     if (added == 0) {
-        crm_info("No host mappings detected in '%s'", hostmap);
+        crm_info("No host mappings detected in '%s'", hostmap);	/* 別名が０件の場合のinfoメッセージ */
     }
-
+	/* 構築した別名構築用のハッシュテーブルを返す */
     free(name);
     return aliases;
 }
@@ -484,7 +489,7 @@ parse_host_list(const char *hosts)
     crm_trace("Parsed %d entries from '%s'", g_list_length(output), hosts);
     return output;
 }
-
+/* agentのmetadataを取得する */
 static xmlNode *
 get_agent_metadata(const char *agent)
 {
@@ -527,7 +532,7 @@ is_nodeid_required(xmlNode * xml)
     freeXpathObject(xpath);
     return TRUE;
 }
-
+/* 取得したagentのmetadataのxml情報からtagetの実行可能なアクション情報を取得する */
 static char *
 get_on_target_actions(xmlNode * xml)
 {
@@ -593,19 +598,21 @@ build_device_from_xml(xmlNode * msg)
 	/* pcmk_host_listがデバイスリストの展開パラメータにある場合 */
     value = g_hash_table_lookup(device->params, STONITH_ATTR_HOSTLIST);
     if (value) {
-		/* デバイスリストのtargetsにpcmk_host_listをパースしてセットする */
+		/* デバイスのtargetsにpcmk_host_listをパースしてセットする */
         device->targets = parse_host_list(value);
     }
-
+	/* パラメータから"pcmk_host_map"を取得する */
     value = g_hash_table_lookup(device->params, STONITH_ATTR_HOSTMAP);
-    /* ホストの別名情報をハッシュテーブルに構築する */
+    /* パラメータの"pcmk_host_map"から、ホストの別名情報をハッシュテーブルに構築する */
     device->aliases = build_port_aliases(value, &(device->targets));
-
+	/* agentのmetadataを取得し、xml情報にセットする */
     device->agent_metadata = get_agent_metadata(device->agent);
+	/* 取得したagentのmetadataのxml情報からtagetの実行可能なアクション情報を取得する */
     device->on_target_actions = get_on_target_actions(device->agent_metadata);
-
+	/* パラメータからnodeidを取得する */
     value = g_hash_table_lookup(device->params, "nodeid");
     if (!value) {
+		/* パラメータにnoideidがある場合は、nodeidが必要か判定する */
         device->include_nodeid = is_nodeid_required(device->agent_metadata);
     }
 
@@ -762,12 +769,13 @@ dynamic_list_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
 		/* listコマンドの実行に成功した場合 */
         crm_info("Refreshing port list for %s", dev->id);
         g_list_free_full(dev->targets, free);
-        /* hostlistをパースする */
+        /* list応答outputのhostlistをパースする */
         dev->targets = parse_host_list(output);
         dev->targets_age = time(NULL);
     }
 
     if (dev->targets) {
+		/* hostlistがパース出来た場合 */
         const char *alias = g_hash_table_lookup(dev->aliases, search->host);
 
         if (!alias) {
@@ -1092,6 +1100,8 @@ can_fence_host_with_device(stonith_device_t * dev, struct device_search_s *searc
         search->action &&
         strstr(dev->on_target_actions, search->action) && safe_str_neq(host, stonith_our_uname)) {
         /* this device can only execute this action on the target node */
+        /* agentにtarget指定がある場合(fence_legacy,fenc_pcmkにはない)で、actionが一致して、ホスト名が
+        自ノードの場合は、結果に積み上げない */
         goto search_report_results;
     }
 	/* デバイスのaliasesリストから対象STONITNノードのaliasを検索 */
@@ -1297,6 +1307,7 @@ stonith_query_capable_device_cb(GList * devices, void *user_data)
     }
 
     if (list != NULL) {
+		/* 積み上げたデバイスのxml情報をQUERY応答にセットする */
         crm_trace("Attaching query list output");
         add_message_xml(query->reply, F_STONITH_CALLDATA, list);
     }
@@ -1405,14 +1416,17 @@ stonith_send_async_reply(async_command_t * cmd, const char *output, int rc, GPid
     crm_log_xml_trace(reply, "Reply");
 
     if (bcast) {
+		/* broadcastの場合は、クラスタ内のノードにT_STONITH_NOTIFYメッセージで送信する */
         crm_xml_add(reply, F_STONITH_OPERATION, T_STONITH_NOTIFY);
         send_cluster_message(NULL, crm_msg_stonith_ng, reply, FALSE);
 
     } else if (cmd->origin) {
+		/* broadcastでない場合は、コマンドの依頼元にSTONITH_OP_FENCE応答メッセージで送信する */
         crm_trace("Directed reply to %s", cmd->origin);
         send_cluster_message(crm_get_peer(0, cmd->origin), crm_msg_stonith_ng, reply, FALSE);
 
     } else {
+		/* broadcastでない場合で、コマンドの依頼元が無い場合は、自ノードに応答メッセージを送信する */
         crm_trace("Directed local %ssync reply to %s",
                   (cmd->options & st_opt_sync_call) ? "" : "a-", cmd->client_name);
         do_local_reply(reply, cmd->client, cmd->options & st_opt_sync_call, FALSE);
@@ -1915,7 +1929,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
                    client ? client->name : remote_peer,
                    crm_element_value(dev, F_STONITH_ACTION),
                    crm_element_value(dev, F_STONITH_TARGET));
-
+		/* FENCEの為にQUERY処理を開始する */
         if (initiate_remote_stonith_op(NULL, request, FALSE) != NULL) {
             rc = -EINPROGRESS;
         }
@@ -1933,6 +1947,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
             const char *target = crm_element_value(dev, F_STONITH_TARGET);
 
             crm_notice("Received manual confirmation that %s is fenced", target);
+      		/* FENCEの為にQUERY処理を開始する */
             rop = initiate_remote_stonith_op(client, request, TRUE);
             rc = stonith_manual_ack(request, rop);
 
@@ -1987,6 +2002,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
                                      FALSE);
                 rc = -EINPROGRESS;
 			/* 他ノード及び、自ノードをSONTIH可能な実行ホストが不明の場合ののREMOTE STONITH処理 */
+			/* FENCEの為にQUERY処理を開始する */
             } else if (initiate_remote_stonith_op(client, request, FALSE) != NULL) {	
                 rc = -EINPROGRESS;
             }

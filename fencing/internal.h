@@ -15,33 +15,33 @@ gboolean stonith_check_fence_tolerance(int tolerance, const char *target, const 
 typedef struct stonith_device_s {
     char *id;							/* リソースid */
     char *agent;						/* 実行エージェント名 */
-    char *namespace;
+    char *namespace;					/* 名前空間 "heartbet","redhat" */
 
     /*! list of actions that must execute on the target node. Used for unfencing */
-    char *on_target_actions;
+    char *on_target_actions;			/* 取得したagentのmetadataのxml情報から取得したtagetの実行可能なアクション情報 */
     GListPtr targets;					/* dynamic_listの場合は、STONITHリソースのパラメータに設定されたhost_list */
-    time_t targets_age;
-    gboolean has_attr_map;
+    time_t targets_age;					/* listコマンドを最後に実行した時間 */
+    gboolean has_attr_map;				/* 未使用 */
     /* should nodeid parameter for victim be included in agent arguments */
-    gboolean include_nodeid;
-    guint priority;
-    guint active_pid;
+    gboolean include_nodeid;			/* nodeidパラメータが指定されている場合のnodeidの判定有無 */
+    guint priority;						/* 未使用 */
+    guint active_pid;					/* デバイスが未処理：０、処理中：PID */
 
-    GHashTable *params;
-    GHashTable *aliases;
-    GList *pending_ops;
-    crm_trigger_t *work;
-    xmlNode *agent_metadata;
+    GHashTable *params;					/* パラメータ情報 */
+    GHashTable *aliases;				/* パラメータ"pcmk_host_map"から生成されたホストの別名情報ハッシュテーブル */
+    GList *pending_ops;					/* 実行待ちぺレーションリスト */
+    crm_trigger_t *work;				/* 実行トリガー */
+    xmlNode *agent_metadata;			/* 実行エージェント(fence_legacy,fence_pcmk..etc...)のmetadata情報 */
 
     /*! A verified device is one that has contacted the
      * agent successfully to perform a monitor operation */
     gboolean verified;					/* デバイスの"list","monitor","status"が実行済の場合は、TRUE */
     									/* 未実行、デバイスが削除された場合などはFALSE */
 
-    gboolean cib_registered;
-    gboolean api_registered;
+    gboolean cib_registered;			/* cib情報を元にして登録されたデバイスの場合 TRUE,初期値:FALSE */
+    gboolean api_registered;			/* apiからの情報を元にして登録されたデバイスの場合 TRUE,初期値:FALSE */
 } stonith_device_t;
-/* フェンシング情報 */
+/* フェンシング操作情報 */
 typedef struct remote_fencing_op_s {
     /* The unique id associated with this operation */
     char *id;
