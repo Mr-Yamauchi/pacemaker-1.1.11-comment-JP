@@ -91,7 +91,7 @@ typedef struct remote_fencing_op_s {
      * what phase the op is in, query, exec, done, duplicate, failed. */
     enum op_state state;
     /*! The node that owns the remote operation */
-    char *originator;
+    char *originator;						/* STONITHの起点となったノード名 */
     /*! The local client id that initiated the fencing request */
     char *client_id;
     /*! The client's call_id that initiated the fencing request */

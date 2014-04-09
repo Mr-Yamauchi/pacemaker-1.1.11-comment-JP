@@ -84,13 +84,13 @@ typedef struct async_command_s {
     int timeout;
 
     char *op;
-    char *origin;
+    char *origin;						/* STONITH依頼元ノード名 */
     char *client;
     char *client_name;
     char *remote_op_id;
 
-    char *victim;
-    uint32_t victim_nodeid;
+    char *victim;						/* STONITH対象ノード名 */
+    uint32_t victim_nodeid;				/* STONITH対象ノードID */
     char *action;
     char *device;
     char *mode;
@@ -131,7 +131,7 @@ get_action_timeout(stonith_device_t * device, const char *action, int default_ti
 
     return atoi(value);
 }
-
+/* 非同期コマンドエリアの解放 */
 static void
 free_async_command(async_command_t * cmd)
 {
@@ -168,22 +168,22 @@ create_async_command(xmlNode * msg)
     crm_element_value_int(msg, F_STONITH_CALLOPTS, &(cmd->options));
     crm_element_value_int(msg, F_STONITH_TIMEOUT, &(cmd->default_timeout));
     cmd->timeout = cmd->default_timeout;
-
+	/* 依頼元をセットする */
     cmd->origin = crm_element_value_copy(msg, F_ORIG);
     cmd->remote_op_id = crm_element_value_copy(msg, F_STONITH_REMOTE_OP_ID);
     cmd->client = crm_element_value_copy(msg, F_STONITH_CLIENTID);
     cmd->client_name = crm_element_value_copy(msg, F_STONITH_CLIENTNAME);
     cmd->op = crm_element_value_copy(msg, F_STONITH_OPERATION);
     cmd->action = strdup(action);
-    cmd->victim = crm_element_value_copy(op, F_STONITH_TARGET);
+    cmd->victim = crm_element_value_copy(op, F_STONITH_TARGET);	/* targetからSTONITH対象をセット */
     cmd->mode = crm_element_value_copy(op, F_STONITH_MODE);
     cmd->device = crm_element_value_copy(op, F_STONITH_DEVICE);
 
     CRM_CHECK(cmd->op != NULL, crm_log_xml_warn(msg, "NoOp"); free_async_command(cmd); return NULL);
     CRM_CHECK(cmd->client != NULL, crm_log_xml_warn(msg, "NoClient"));
 
-    cmd->done_cb = st_child_done;			/* stonith実行子プロセスの完了コールバック */
-    cmd_list = g_list_append(cmd_list, cmd);
+    cmd->done_cb = st_child_done;				/* stonith実行子プロセスの完了コールバック */
+    cmd_list = g_list_append(cmd_list, cmd);	/* 非同期コマンドをリストに保存 */
     return cmd;
 }
 /* STONITHトリガー処理 */
@@ -275,7 +275,7 @@ schedule_stonith_command(async_command_t * cmd, stonith_device_t * device)
     }
 
     if (device->include_nodeid && cmd->victim) {
-		/* nodeid判定が必要な場合で、依頼先が設定されていう場合は、依頼先の接続node情報を取得する */
+		/* nodeid判定が必要な場合で、依頼先が設定されている場合は、依頼先の接続node情報を取得する */
         crm_node_t *node = crm_get_peer(0, cmd->victim);
 		/* 取得したnode情報を依頼先のnodeidにセットする */
         cmd->victim_nodeid = node->id;
@@ -311,6 +311,7 @@ free_device(gpointer data)
 
         crm_warn("Removal of device '%s' purged operation %s", device->id, cmd->action);
         cmd->done_cb(0, -ENODEV, NULL, cmd);
+        /* 非同期コマンドエリアの解放 */
         free_async_command(cmd);
     }
     g_list_free(device->pending_ops);
@@ -669,9 +670,9 @@ schedule_internal_command(const char *origin,
     cmd->default_timeout = timeout ? timeout : 60;
     cmd->timeout = cmd->default_timeout;
     cmd->action = strdup(action);
-    cmd->victim = victim ? strdup(victim) : NULL;
+    cmd->victim = victim ? strdup(victim) : NULL;	/* STONITH対象をセット */
     cmd->device = strdup(device->id);
-    cmd->origin = strdup(origin);
+    cmd->origin = strdup(origin);					/* 依頼元をセットする */
     cmd->client = strdup(crm_system_name);
     cmd->client_name = strdup(crm_system_name);
 
@@ -706,7 +707,7 @@ status_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
     struct device_search_s *search = cmd->internal_user_data;
     stonith_device_t *dev = cmd->device ? g_hash_table_lookup(device_list, cmd->device) : NULL;
     gboolean can = FALSE;
-
+	/* 非同期コマンドエリアの解放 */
     free_async_command(cmd);
 
     if (!dev) {
@@ -739,7 +740,7 @@ dynamic_list_search_cb(GPid pid, int rc, const char *output, gpointer user_data)
     struct device_search_s *search = cmd->internal_user_data;
     stonith_device_t *dev = cmd->device ? g_hash_table_lookup(device_list, cmd->device) : NULL;
     gboolean can_fence = FALSE;
-
+	/* 非同期コマンドエリアの解放 */
     free_async_command(cmd);
 
     /* Host/alias must be in the list output to be eligable to be fenced
@@ -1173,7 +1174,7 @@ search_devices(gpointer key, gpointer value, gpointer user_data)
 	/* 単一デバイス情報をサーチ情報でフェンスチェック */
     can_fence_host_with_device(dev, search);
 }
-
+/* STONITHデバイスを取得する */
 #define DEFAULT_QUERY_TIMEOUT 20
 static void
 get_capable_devices(const char *host, const char *action, int timeout, void *user_data,
@@ -1355,7 +1356,7 @@ stonith_query(xmlNode * msg, const char *remote_peer, const char *client_id, int
     query->target = target ? strdup(target) : NULL;
     query->action = action ? strdup(action) : NULL;
     query->call_options = call_options;
-
+	/* QUERY応答用のSTONITHデバイスを取得する */
     get_capable_devices(target, action, timeout, query, stonith_query_capable_device_cb);
 }
 
@@ -1421,7 +1422,7 @@ stonith_send_async_reply(async_command_t * cmd, const char *output, int rc, GPid
         send_cluster_message(NULL, crm_msg_stonith_ng, reply, FALSE);
 
     } else if (cmd->origin) {
-		/* broadcastでない場合は、コマンドの依頼元にSTONITH_OP_FENCE応答メッセージで送信する */
+		/* broadcastでない場合で依頼元がある場合は、コマンドの依頼元にSTONITH_OP_FENCE応答メッセージで送信する */
         crm_trace("Directed reply to %s", cmd->origin);
         send_cluster_message(crm_get_peer(0, cmd->origin), crm_msg_stonith_ng, reply, FALSE);
 
@@ -1489,7 +1490,7 @@ cancel_stonith_command(async_command_t * cmd)
 }
 
 #define READ_MAX 500
-/* stonith実行　子プロセスの完了コールバック */
+/* stonith実行 子プロセスの完了コールバック */
 static void
 st_child_done(GPid pid, int rc, const char *output, gpointer user_data)
 {
@@ -1519,7 +1520,7 @@ st_child_done(GPid pid, int rc, const char *output, gpointer user_data)
 
     crm_trace("Operation %s on %s completed with rc=%d (%d remaining)",
               cmd->action, cmd->device, rc, g_list_length(cmd->device_next));
-
+	/* STONITHが失敗してfencig_topologyからの動作で次のデバイスがある場合 */
     if (rc != 0 && cmd->device_next) {
 		/* 実行コマンドがエラーで、次のデバイスがセットされている場合 */
 		/* 次のデバイスが自ノードに存在するか検索する */
@@ -1535,8 +1536,10 @@ st_child_done(GPid pid, int rc, const char *output, gpointer user_data)
             cmd = NULL;
             goto done;
         }
+        /* 自ノードに次のデバイスが存在しなければ次へ進み一旦応答 */
     }
-
+	/* STONITHが成功、もしくは失敗して、fencig_topologyからの動作で次のデバイスがない場合 */
+	/* もしくは、fencing_topologyからの設定ではない場合 */
     if (rc > 0) {
         /* Try to provide _something_ useful */
         if(output == NULL) {
@@ -1585,7 +1588,7 @@ st_child_done(GPid pid, int rc, const char *output, gpointer user_data)
 
             continue;
         }
-		/* コマンドの正常実行完了後に、他の同一デバイス・同一操作の要求処理が来ていた場合は、それらのコマンドにも応答を返す */
+		/* コマンドの実行完了後に、他の同一デバイス・同一操作の要求処理が来ていた場合は、それらのコマンドにも応答を返す */
         crm_notice
             ("Merging stonith action %s for node %s originating from client %s with identical stonith request from client %s",
              cmd_other->action, cmd_other->victim, cmd_other->client_name, cmd->client_name);
@@ -1594,12 +1597,13 @@ st_child_done(GPid pid, int rc, const char *output, gpointer user_data)
 
         stonith_send_async_reply(cmd_other, output, rc, pid);
         cancel_stonith_command(cmd_other);
-
+		/* 非同期コマンドエリアの解放 */
         free_async_command(cmd_other);
         g_list_free_1(gIter);
     }
 
   done:
+	/* 非同期コマンドエリアの解放 */
     free_async_command(cmd);
 }
 
@@ -1648,7 +1652,7 @@ stonith_fence_get_devices_cb(GList * devices, void *user_data)
 	/* 自ノードに実行可能なデバイスが無い場合は、失敗の応答を送信 */
     /* no device found! */
     stonith_send_async_reply(cmd, NULL, -ENODEV, 0);
-
+	/* 非同期コマンドエリアの解放 */
     free_async_command(cmd);
     g_list_free_full(devices, free);
 }
@@ -1690,6 +1694,7 @@ stonith_fence(xmlNode * msg)
             }
         }
         /* 実行デバイスを取得し、stonith_fence_get_devices_cbコールバックで処理 */
+       	/* FENCE用のSTONITHデバイスを取得する */
         get_capable_devices(host, cmd->action, cmd->default_timeout, cmd,
                             stonith_fence_get_devices_cb);
     }
@@ -1755,6 +1760,7 @@ stonith_construct_async_reply(async_command_t * cmd, const char *output, xmlNode
     crm_xml_add(reply, F_STONITH_CLIENTNAME, cmd->client_name);
     crm_xml_add(reply, F_STONITH_TARGET, cmd->victim);
     crm_xml_add(reply, F_STONITH_ACTION, cmd->op);
+    /* 依頼元ノード名をSTONITHの起点となったノード名にセットする */
     crm_xml_add(reply, F_STONITH_ORIGIN, cmd->origin);
     crm_xml_add_int(reply, F_STONITH_CALLID, cmd->id);
     crm_xml_add_int(reply, F_STONITH_CALLOPTS, cmd->options);
@@ -1941,7 +1947,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
             rc = stonith_fence(request);
 
         } else if (call_options & st_opt_manual_ack) {
-			/* stonith_adminからのSTONITH実行の確認 */
+			/* stonith_adminからの-CオプションによるSTONITH実行 */
             remote_fencing_op_t *rop = NULL;
             xmlNode *dev = get_xpath_object("//@" F_STONITH_TARGET, request, LOG_TRACE);
             const char *target = crm_element_value(dev, F_STONITH_TARGET);
@@ -1949,6 +1955,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
             crm_notice("Received manual confirmation that %s is fenced", target);
       		/* FENCEの為にQUERY処理を開始する */
             rop = initiate_remote_stonith_op(client, request, TRUE);
+            /* manual実行応答処理(stonith_admin -C) */
             rc = stonith_manual_ack(request, rop);
 
         } else {
@@ -2074,7 +2081,7 @@ handle_request(crm_client_t * client, uint32_t id, uint32_t flags, xmlNode * req
         crm_xml_add(reply, F_STONITH_OPERATION, T_STONITH_NOTIFY);
         crm_notice("Broadcasting manual fencing confirmation for node %s", cmd->victim);
         send_cluster_message(NULL, crm_msg_stonith_ng, reply, FALSE);
-
+		/* 非同期コマンドエリアの解放 */
         free_async_command(cmd);
         free_xml(reply);
 

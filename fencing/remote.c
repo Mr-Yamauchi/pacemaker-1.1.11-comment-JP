@@ -142,13 +142,14 @@ create_op_done_notify(remote_fencing_op_t * op, int rc)
     crm_xml_add(notify_data, F_STONITH_ACTION, op->action);
     crm_xml_add(notify_data, F_STONITH_DELEGATE, op->delegate);
     crm_xml_add(notify_data, F_STONITH_REMOTE_OP_ID, op->id);
+	/* 起点となったノード名をセットする */
     crm_xml_add(notify_data, F_STONITH_ORIGIN, op->originator);
     crm_xml_add(notify_data, F_STONITH_CLIENTID, op->client_id);
     crm_xml_add(notify_data, F_STONITH_CLIENTNAME, op->client_name);
 
     return notify_data;
 }
-
+/* T_STONITH_NOTIFYメッセージをbroadcastで送信する */
 static void
 bcast_result_to_peers(remote_fencing_op_t * op, int rc)
 {
@@ -163,6 +164,7 @@ bcast_result_to_peers(remote_fencing_op_t * op, int rc)
     crm_xml_add(bcast, F_STONITH_OPERATION, T_STONITH_NOTIFY);
     crm_xml_add_int(bcast, "count", count);
     add_message_xml(bcast, F_STONITH_CALLDATA, notify_data);
+    /* T_STONITH_NOTIFYメッセージをクラスタに送信する */
     send_cluster_message(NULL, crm_msg_stonith_ng, bcast, FALSE);
     free_xml(notify_data);
     free_xml(bcast);
@@ -267,6 +269,7 @@ remote_op_done(remote_fencing_op_t * op, xmlNode * data, int rc, int dup)
     }
 
     if (!op->delegate && data) {
+		/* delegateが未設定で、付属データがある場合は、delegateに依頼元をセットする */
         op->delegate = crm_element_value_copy(data, F_ORIG);
     }
 
@@ -281,6 +284,7 @@ remote_op_done(remote_fencing_op_t * op, xmlNode * data, int rc, int dup)
     subt = crm_element_value(data, F_SUBTYPE);
     if (dup == FALSE && safe_str_neq(subt, "broadcast")) {
         /* Defer notification until the bcast message arrives */
+        /* broadcastでない場合, T_STONITH_NOTIFYメッセージをbroadcastで送信する */
         bcast_result_to_peers(op, rc);
         goto remote_op_done_cleanup;
     }
@@ -318,7 +322,7 @@ remote_op_done(remote_fencing_op_t * op, xmlNode * data, int rc, int dup)
   remote_op_done_cleanup:
     free_xml(local_data);
 }
-
+/* タイムアウト処理 */
 static gboolean
 remote_op_timeout_one(gpointer userdata)
 {
@@ -331,7 +335,7 @@ remote_op_timeout_one(gpointer userdata)
     call_remote_stonith(op, NULL);
     return FALSE;
 }
-
+/* タイムアウト処理 */
 static gboolean
 remote_op_timeout(gpointer userdata)
 {
@@ -347,12 +351,13 @@ remote_op_timeout(gpointer userdata)
 
     crm_debug("Action %s (%s) for %s (%s) timed out",
               op->action, op->id, op->target, op->client_name);
+    /* 失敗状態セット */
     op->state = st_failed;
     remote_op_done(op, NULL, -ETIME, FALSE);
 
     return FALSE;
 }
-
+/* QUERYタイムアウト処理 */
 static gboolean
 remote_op_query_timeout(gpointer data)
 {
@@ -367,6 +372,7 @@ remote_op_query_timeout(gpointer data)
         crm_debug("Query %s for %s complete: %d", op->id, op->target, op->state);
         call_remote_stonith(op, NULL);
     } else {
+		/* QUERYがタイムアウトした場合 */
         crm_debug("Query %s for %s timed out: %d", op->id, op->target, op->state);
         if (op->op_timer_total) {
             g_source_remove(op->op_timer_total);
@@ -532,7 +538,7 @@ static uint32_t fencing_active_peers(void)
     }
     return count;
 }
-
+/* manual実行応答処理(stonith_admin -C) */
 int
 stonith_manual_ack(xmlNode * msg, remote_fencing_op_t * op)
 {
@@ -544,7 +550,7 @@ stonith_manual_ack(xmlNode * msg, remote_fencing_op_t * op)
 
     crm_notice("Injecting manual confirmation that %s is safely off/down",
                crm_element_value(dev, F_STONITH_TARGET));
-
+	/* 完了処理 */
     remote_op_done(op, msg, pcmk_ok, FALSE);
 
     /* Replies are sent via done_cb->stonith_send_async_reply()->do_local_reply() */
@@ -607,12 +613,15 @@ create_remote_stonith_op(const char *client, xmlNode * request, gboolean peer)
     /* FENCE可能なノード数をカウント */
     op->replies_expected = fencing_active_peers();
     op->action = crm_element_value_copy(dev, F_STONITH_ACTION);
+	/* STONITHの起点となったノード名をセットする */
     op->originator = crm_element_value_copy(dev, F_STONITH_ORIGIN);
+    /* "st_delegate"をセットする */
     op->delegate = crm_element_value_copy(dev, F_STONITH_DELEGATE); /* May not be set */
     op->created = time(NULL);
 
     if (op->originator == NULL) {
         /* Local or relayed request */
+        /* 依頼元がセットされていない場合は、自ノードが依頼元の為、自ノードを依頼元にセットする */
         op->originator = strdup(stonith_our_uname);
     }
 
@@ -655,6 +664,7 @@ create_remote_stonith_op(const char *client, xmlNode * request, gboolean peer)
     return op;
 }
 /* REMOTE STONITH開始処理(QUERY処理の開始) */
+/* stonith_admin -C実行時は、manual_ackはtrue */
 remote_fencing_op_t *
 initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean manual_ack)
 {
@@ -674,6 +684,7 @@ initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean ma
     op = create_remote_stonith_op(client_id, request, FALSE);
     op->owner = TRUE;
     if (manual_ack) {
+		/* stonith_admin -C実行時は、manual_ackはreturen */
         crm_notice("Initiating manual confirmation for %s: %s",
                    op->target, op->id);
         return op;
@@ -713,6 +724,7 @@ initiate_remote_stonith_op(crm_client_t * client, xmlNode * request, gboolean ma
     crm_xml_add(query, F_STONITH_REMOTE_OP_ID, op->id);
     crm_xml_add(query, F_STONITH_TARGET, op->target);
     crm_xml_add(query, F_STONITH_ACTION, op->action);
+	/* 起点となったノード名をセットする */
     crm_xml_add(query, F_STONITH_ORIGIN, op->originator);
     crm_xml_add(query, F_STONITH_CLIENTID, op->client_id);
     crm_xml_add(query, F_STONITH_CLIENTNAME, op->client_name);
@@ -1042,6 +1054,7 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
         crm_xml_add(query, F_STONITH_REMOTE_OP_ID, op->id);
         crm_xml_add(query, F_STONITH_TARGET, op->target);
         crm_xml_add(query, F_STONITH_ACTION, op->action);
+        /* 起点となったノード名をセットする */
         crm_xml_add(query, F_STONITH_ORIGIN, op->originator);
         crm_xml_add(query, F_STONITH_CLIENTID, op->client_id);
         crm_xml_add(query, F_STONITH_CLIENTNAME, op->client_name);
@@ -1063,11 +1076,12 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
                      peer->host, op->action, op->target, op->client_name, timeout_one);
             crm_xml_add(query, F_STONITH_MODE, "smart");
         }
-
+		/* 実行状態にセット */
         op->state = st_exec;
         if (op->op_timer_one) {
             g_source_remove(op->op_timer_one);
         }
+        /* 実行タイマーをセット */
         op->op_timer_one = g_timeout_add((1000 * timeout_one), remote_op_timeout_one, op);
 		/* 実行先ノードにSTONITHを依頼(STONITH_OP_FENCE) */
         send_cluster_message(crm_get_peer(0, peer->host), crm_msg_stonith_ng, query, FALSE);
@@ -1087,6 +1101,8 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
         remote_op_timeout(op);
 
     } else if(op->replies >= op->replies_expected || op->replies >= fencing_active_peers()) {
+		/* 必要応答数に達しているか？リプライ数がノード数を超えているにもかかわらず、 */
+		/* 依頼先が決定しなかった場合 */
         int rc = -EHOSTUNREACH;
 
         /* if the operation never left the query state,
@@ -1103,6 +1119,7 @@ call_remote_stonith(remote_fencing_op_t * op, st_query_result_t * peer)
         }
 
         op->state = st_failed;
+        /* STONITH失敗 */
         remote_op_done(op, NULL, rc, FALSE);
 
     } else if (device) {
@@ -1352,6 +1369,7 @@ process_remote_stonith_exec(xmlNode * msg)
         /* Record successful fencing operations */
         const char *client_id = crm_element_value(dev, F_STONITH_CLIENTID);
 		/* リモートSTONITH用の操作データを生成して、このノードのstonithの実行リストに追加する */
+		/* 完了したSTONITHが自ノードが起点となったSTONITHでない場合には、完了したオペレーションを自ノードで登録する */
         op = create_remote_stonith_op(client_id, dev, TRUE);
     }
 
@@ -1384,12 +1402,14 @@ process_remote_stonith_exec(xmlNode * msg)
     } else if (safe_str_neq(op->originator, stonith_our_uname)) {
         /* If this isn't a remote level broadcast, and we are not the
          * originator of the operation, we should not be receiving this msg. */
+         /* broadcastメッセージ以外で、自ノードがSTONITH依頼元でメッセージを受信した場合 */
+         /* --- 自ノードがSTONITH依頼元の場合には受信しない?? --- */
         crm_err
             ("%s received non-broadcast fencing result for operation it does not own (device %s targeting %s)",
              stonith_our_uname, device, op->target);
         return rc;
     }
-
+	/* STONITH実行ノード(依頼先)からの応答の場合 */
     if (is_set(op->call_options, st_opt_topology)) {
 		/* fencing_topologyを処理中のSTONITH完了応答、NOTIFYの場合 */
         const char *device = crm_element_value(msg, F_STONITH_DEVICE);
@@ -1401,6 +1421,7 @@ process_remote_stonith_exec(xmlNode * msg)
         /* We own the op, and it is complete. broadcast the result to all nodes
          * and notify our local clients. */
         if (op->state == st_done) {
+			/* STONITHが成功した場合 */
             remote_op_done(op, msg, rc, FALSE);
             return rc;
         }
@@ -1494,6 +1515,7 @@ stonith_fence_history(xmlNode * msg, xmlNode ** output)
             entry = create_xml_node(*output, STONITH_OP_EXEC);
             crm_xml_add(entry, F_STONITH_TARGET, op->target);
             crm_xml_add(entry, F_STONITH_ACTION, op->action);
+            /* 起点となったノード名をセットする */
             crm_xml_add(entry, F_STONITH_ORIGIN, op->originator);
             crm_xml_add(entry, F_STONITH_DELEGATE, op->delegate);
             crm_xml_add(entry, F_STONITH_CLIENTNAME, op->client_name);

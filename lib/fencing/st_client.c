@@ -1356,7 +1356,7 @@ stonith_api_fence(stonith_t * stonith, int call_options, const char *node, const
 
     return rc;
 }
-
+/* Manual StonithÇÃé¿çs */
 static int
 stonith_api_confirm(stonith_t * stonith, int call_options, const char *target)
 {

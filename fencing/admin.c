@@ -431,7 +431,7 @@ main(int argc, char **argv)
             }
             break;
         case 'C':
-            rc = st->cmds->confirm(st, st_opts, target);	/* STONITH実行の確認 */
+            rc = st->cmds->confirm(st, st_opts, target);	/* manual STONITH実行 */
             break;
         case 'B':
             rc = mainloop_fencing(st, target, "reboot", timeout, tolerance);
