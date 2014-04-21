@@ -1408,6 +1408,7 @@ stonith_send_async_reply(async_command_t * cmd, const char *output, int rc, GPid
 
     } else if (!stand_alone && safe_str_eq(cmd->origin, cmd->victim) && safe_str_neq(cmd->action, "on")) {
 		/* stand_aloneでなく、コマンドの依頼元とFENCING対象が同じで、onコマンドでない場合は、broadcastをセット */
+		/* ** 通常、他ノードがSTONITHの依頼元で、FENCING対象の場合は、成功時はFENCING対象に応答出来ないので"broadcast" *** */
         crm_trace("Broadcast %s reply for %s", cmd->action, cmd->victim);
         crm_xml_add(reply, F_SUBTYPE, "broadcast");
         bcast = TRUE;
@@ -1428,6 +1429,7 @@ stonith_send_async_reply(async_command_t * cmd, const char *output, int rc, GPid
 
     } else {
 		/* broadcastでない場合で、コマンドの依頼元が無い場合は、自ノードに応答メッセージを送信する */
+		/* 自ノードでの、"monitor","status","list"などが該当 */
         crm_trace("Directed local %ssync reply to %s",
                   (cmd->options & st_opt_sync_call) ? "" : "a-", cmd->client_name);
         do_local_reply(reply, cmd->client, cmd->options & st_opt_sync_call, FALSE);

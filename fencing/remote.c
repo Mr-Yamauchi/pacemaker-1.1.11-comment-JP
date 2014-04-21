@@ -149,7 +149,7 @@ create_op_done_notify(remote_fencing_op_t * op, int rc)
 
     return notify_data;
 }
-/* T_STONITH_NOTIFYメッセージをbroadcastで送信する */
+/* 依頼先からのSTONITH完了結果を受けた、依頼元ノードが、T_STONITH_NOTIFYメッセージをクラスタメンバーにbroadcastで送信する */
 static void
 bcast_result_to_peers(remote_fencing_op_t * op, int rc)
 {
@@ -193,9 +193,11 @@ handle_local_reply_and_notify(remote_fencing_op_t * op, xmlNode * data, int rc)
     crm_xml_add(reply, F_STONITH_DELEGATE, op->delegate);
 
     /* Send fencing OP reply to local client that initiated fencing */
+	/* コマンドの依頼元のクライアントにIPCメッセージを応答する */
     do_local_reply(reply, op->client_id, op->call_options & st_opt_sync_call, FALSE);
 
     /* bcast to all local clients that the fencing operation happend */
+    /* 接続クライアントにT_STONITH_NOTIFY_FENCEを通知する */
     do_stonith_notify(0, T_STONITH_NOTIFY_FENCE, rc, notify_data);
 
     /* mark this op as having notify's already sent */
@@ -251,13 +253,14 @@ handle_duplicates(remote_fencing_op_t * op, xmlNode * data, int rc)
  * \param dup, Is this operation a duplicate, if so treat it a little differently
  *             making sure the broadcast is not sent out.
  */
+/* 実行オペレーションの完了処理 */
 static void
 remote_op_done(remote_fencing_op_t * op, xmlNode * data, int rc, int dup)
 {
     int level = LOG_ERR;
     const char *subt = NULL;
     xmlNode *local_data = NULL;
-
+	/* 実行タイマーのキャンセル */
     op->completed = time(NULL);
     clear_remote_op_timers(op);
 
@@ -285,6 +288,7 @@ remote_op_done(remote_fencing_op_t * op, xmlNode * data, int rc, int dup)
     if (dup == FALSE && safe_str_neq(subt, "broadcast")) {
         /* Defer notification until the bcast message arrives */
         /* broadcastでない場合, T_STONITH_NOTIFYメッセージをbroadcastで送信する */
+        /* 自ノードがstonith対象でない場合で、依頼元のノードからの直接の応答(STONITH_OP_FENCE応答)の場合が該当 */
         bcast_result_to_peers(op, rc);
         goto remote_op_done_cleanup;
     }
@@ -299,7 +303,8 @@ remote_op_done(remote_fencing_op_t * op, xmlNode * data, int rc, int dup)
                "Operation %s of %s by %s for %s@%s.%.8s: %s",
                op->action, op->target, op->delegate ? op->delegate : "<no-one>",
                op->client_name, op->originator, op->id, pcmk_strerror(rc));
-	/* STONITH完了の応答と完了のNOTIFY */
+	/* ローカル接続クライアントへのSTONITH完了の応答と完了のNOTIFY */
+	/* 通常、完了の"broadcast"の場合は、ローカルへ */
     handle_local_reply_and_notify(op, data, rc);
 
     if (dup == FALSE) {
@@ -613,7 +618,7 @@ create_remote_stonith_op(const char *client, xmlNode * request, gboolean peer)
     /* FENCE可能なノード数をカウント */
     op->replies_expected = fencing_active_peers();
     op->action = crm_element_value_copy(dev, F_STONITH_ACTION);
-	/* STONITHの起点となったノード名をセットする */
+	/* STONITHの起点(依頼元)となったノード名をセットする */
     op->originator = crm_element_value_copy(dev, F_STONITH_ORIGIN);
     /* "st_delegate"をセットする */
     op->delegate = crm_element_value_copy(dev, F_STONITH_DELEGATE); /* May not be set */
@@ -1402,8 +1407,8 @@ process_remote_stonith_exec(xmlNode * msg)
     } else if (safe_str_neq(op->originator, stonith_our_uname)) {
         /* If this isn't a remote level broadcast, and we are not the
          * originator of the operation, we should not be receiving this msg. */
-         /* broadcastメッセージ以外で、自ノードがSTONITH依頼元でメッセージを受信した場合 */
-         /* --- 自ノードがSTONITH依頼元の場合には受信しない?? --- */
+         /* broadcastメッセージ以外で、自ノードがSTONITH依頼元でないのに、直接応答STONITH_OP_FENCEメッセージを受信した場合 */
+         /* はエラー(依頼元以外にSTONITH_OP_FENCEメッセージを受けることはない */
         crm_err
             ("%s received non-broadcast fencing result for operation it does not own (device %s targeting %s)",
              stonith_our_uname, device, op->target);
