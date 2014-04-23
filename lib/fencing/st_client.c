@@ -1292,7 +1292,7 @@ stonith_api_call(stonith_t * stonith,
     crm_xml_add(data, F_STONITH_DEVICE, id);
     crm_xml_add(data, F_STONITH_ACTION, action);
     crm_xml_add(data, F_STONITH_TARGET, victim);
-
+	/* stonith-ngにSTONITH_OP_EXECコマンドを送信(IPC)して、操作(start,stop,monitor)を実行する */
     rc = stonith_send_command(stonith, STONITH_OP_EXEC, data, output, call_options, timeout);
     free_xml(data);
 
@@ -1324,13 +1324,13 @@ stonith_api_list(stonith_t * stonith, int call_options, const char *id, char **l
 
     return rc;
 }
-
+/* monitor実行依頼 */
 static int
 stonith_api_monitor(stonith_t * stonith, int call_options, const char *id, int timeout)
 {
     return stonith_api_call(stonith, call_options, id, "monitor", NULL, timeout, NULL);
 }
-
+/* status実行依頼 */
 static int
 stonith_api_status(stonith_t * stonith, int call_options, const char *id, const char *port,
                    int timeout)
@@ -1805,7 +1805,7 @@ invoke_callback(stonith_t * st, int call_id, int rc, void *userdata,
 
     callback(st, &data);
 }
-
+/* コールバックの設定 */
 static int
 stonith_api_add_callback(stonith_t * stonith, int call_id, int timeout, int options,
                          void *user_data, const char *callback_name,

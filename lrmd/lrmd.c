@@ -136,6 +136,7 @@ build_rsc_from_xml(xmlNode * msg)
     rsc->class = crm_element_value_copy(rsc_xml, F_LRMD_CLASS);
     rsc->provider = crm_element_value_copy(rsc_xml, F_LRMD_PROVIDER);
     rsc->type = crm_element_value_copy(rsc_xml, F_LRMD_TYPE);
+    /* 実行トリガーをセットする */
     rsc->work = mainloop_add_trigger(G_PRIORITY_HIGH, lrmd_rsc_dispatch, rsc);
     return rsc;
 }
@@ -435,18 +436,22 @@ cmd_finalize(lrmd_cmd_t * cmd, lrmd_rsc_t * rsc)
     }
 
     if (cmd->interval && (cmd->lrmd_op_status == PCMK_LRM_OP_CANCELLED)) {
+		/* モニターでモニターキャンセルの場合 */
         if (rsc) {
+			/* recurring_ops、pending_opsから該当モニターを削除して再実行されないようにする */
             rsc->recurring_ops = g_list_remove(rsc->recurring_ops, cmd);
             rsc->pending_ops = g_list_remove(rsc->pending_ops, cmd);
         }
         free_lrmd_cmd(cmd);
     } else if (cmd->interval == 0) {
         if (rsc) {
+			/* probeモニター,start,stopの場合はpending_opsから完了したコマンドを削除する */
             rsc->pending_ops = g_list_remove(rsc->pending_ops, cmd);
         }
         free_lrmd_cmd(cmd);
     } else {
         /* Clear all the values pertaining just to the last iteration of a recurring op. */
+        /* 再実行されるモニターが完了した場合 */
         cmd->lrmd_op_status = 0;
         cmd->last_pid = 0;
         memset(&cmd->t_run, 0, sizeof(cmd->t_run));
@@ -647,7 +652,7 @@ action_complete(svc_action_t * action)
 
     cmd_finalize(cmd, rsc);
 }
-
+/* STONITHリソースのアクション完了処理 */
 static void
 stonith_action_complete(lrmd_cmd_t * cmd, int rc)
 {
@@ -682,15 +687,17 @@ stonith_action_complete(lrmd_cmd_t * cmd, int rc)
     }
 
     if (recurring && rsc) {
+		/* モニターの場合で、再実行される場合 */
         if (cmd->stonith_recurring_id) {
             g_source_remove(cmd->stonith_recurring_id);
         }
+        /* モニターの場合は、次の実行の為に、タイマーを仕掛ける */
         cmd->stonith_recurring_id = g_timeout_add(cmd->interval, stonith_recurring_op_helper, cmd);
     }
 
     cmd_finalize(cmd, rsc);
 }
-
+/* STONITHリソースのアクションのコールバック */
 static void
 lrmd_stonith_callback(stonith_t * stonith, stonith_callback_data_t * data)
 {
@@ -730,7 +737,7 @@ stonith_connection_failed(void)
     }
     g_list_free(cmd_list);
 }
-
+/* STONITHリソースのアクション処理 */
 static int
 lrmd_rsc_execute_stonith(lrmd_rsc_t * rsc, lrmd_cmd_t * cmd)
 {
@@ -775,6 +782,7 @@ lrmd_rsc_execute_stonith(lrmd_rsc_t * rsc, lrmd_cmd_t * cmd)
             do_monitor = 1;
         }
     } else if (safe_str_eq(cmd->action, "stop")) {
+		/* STONITHからSTONITHデバイスを削除する */
         rc = stonith_api->cmds->remove_device(stonith_api, st_opt_sync_call, cmd->rsc_id);
         rsc->stonith_started = 0;
     } else if (safe_str_eq(cmd->action, "monitor")) {
@@ -786,11 +794,11 @@ lrmd_rsc_execute_stonith(lrmd_rsc_t * rsc, lrmd_cmd_t * cmd)
     }
 
     if (!do_monitor) {
-        goto cleanup_stonith_exec;
+        goto cleanup_stonith_exec;	/* startでデバイス登録時、通常のモニター以外はアクション完了 */
     }
-
+	/* モニターを実行する */
     rc = stonith_api->cmds->monitor(stonith_api, 0, cmd->rsc_id, cmd->timeout / 1000);
-
+	/* モニターの完了コールバックを仕掛ける */
     rc = stonith_api->cmds->register_callback(stonith_api,
                                               rc,
                                               0,
@@ -894,7 +902,7 @@ lrmd_rsc_execute_service_lib(lrmd_rsc_t * rsc, lrmd_cmd_t * cmd)
     cmd_finalize(cmd, rsc);
     return TRUE;
 }
-
+/* アクション実行 */
 static gboolean
 lrmd_rsc_execute(lrmd_rsc_t * rsc)
 {
@@ -941,8 +949,10 @@ lrmd_rsc_execute(lrmd_rsc_t * rsc)
     log_execute(cmd);
 
     if (safe_str_eq(rsc->class, "stonith")) {
+		/* STONITHリソースの場合 */
         lrmd_rsc_execute_stonith(rsc, cmd);
     } else {
+		/* その他リソースの場合 */
         lrmd_rsc_execute_service_lib(rsc, cmd);
     }
 
@@ -952,6 +962,7 @@ lrmd_rsc_execute(lrmd_rsc_t * rsc)
 static gboolean
 lrmd_rsc_dispatch(gpointer user_data)
 {
+	/* アクション実行 */
     return lrmd_rsc_execute(user_data);
 }
 
