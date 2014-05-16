@@ -30,7 +30,7 @@
 
 #define STORM_INTERVAL   2      /* in seconds */
 #define STORM_MULTIPLIER 5      /* multiplied by the number of nodes */
-
+/* ELECTION情報 */
 struct election_s
 {
         enum election_result state;
@@ -48,9 +48,10 @@ static void election_complete(election_t *e)
     e->state = election_won;
 
     if(e->cb) {
+		/* 完了コールバックを実行 */
         e->cb(e);
     }
-
+	/* リセット:タイマー停止 */
     election_reset(e);
 }
 
@@ -100,12 +101,13 @@ election_remove(election_t *e, const char *uname)
         g_hash_table_remove(e->voted, uname);
     }
 }
-
+/* ELECTIONリセット */
 void
 election_reset(election_t *e)
 {
     crm_trace("Resetting election %s", e->name);
     if(e) {
+		/* タイマー停止 */
         mainloop_timer_stop(e->timeout);
     }
     if (e && e->voted) {

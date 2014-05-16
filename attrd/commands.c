@@ -33,7 +33,7 @@
 int last_cib_op_done = 0;
 char *peer_writer = NULL;
 GHashTable *attributes = NULL;
-
+/* attributesハッシュテーブルデータ */
 typedef struct attribute_s {
     char *uuid; /* TODO: Remove if at all possible */
     char *id;
@@ -50,7 +50,7 @@ typedef struct attribute_s {
     char *user;
 
 } attribute_t;
-
+/* attributesハッシュテーブルデータ内のvaluesハッシュテーブルデータ */
 typedef struct attribute_value_s {
         uint32_t nodeid;
         gboolean is_remote;
@@ -167,7 +167,7 @@ create_attribute(xmlNode *xml)
     g_hash_table_replace(attributes, a->id, a);
     return a;
 }
-
+/* IPCクライアントメッセージ処理 */
 void
 attrd_client_message(crm_client_t *client, xmlNode *xml)
 {
@@ -191,7 +191,7 @@ attrd_client_message(crm_client_t *client, xmlNode *xml)
         char *host = crm_element_value_copy(xml, F_ATTRD_HOST);
         const char *attr = crm_element_value(xml, F_ATTRD_ATTRIBUTE);
         const char *value = crm_element_value(xml, F_ATTRD_VALUE);
-
+		/* 自ノードのattributeハッシュテーブルから更新属性を検索する */
         a = g_hash_table_lookup(attributes, attr);
 
         if(host == NULL) {
@@ -213,9 +213,11 @@ attrd_client_message(crm_client_t *client, xmlNode *xml)
             }
 
             if(a) {
+				/* 属性情報が存在する場合は、属性のハッシュテーブル(a->value)から対象ホストのデータを検索する */
                 v = g_hash_table_lookup(a->values, host);
             }
             if(v) {
+				/* 検索出来た場合は、現在の値を属性値を数値化 */
                 int_value = char2score(v->current);
             }
 
@@ -224,6 +226,7 @@ attrd_client_message(crm_client_t *client, xmlNode *xml)
 
                 offset = char2score(offset_s);
             }
+            /* 現在値（もしくは初期値(０)に値を加算 */
             int_value += offset;
 
             if (int_value > INFINITY) {
@@ -238,6 +241,7 @@ attrd_client_message(crm_client_t *client, xmlNode *xml)
 
         if(peer_writer == NULL && election_state(writer) != election_in_progress) {
             crm_info("Starting an election to determine the writer");
+            /* ELECTION開始 */
             election_vote(writer);
         }
 
@@ -253,7 +257,7 @@ attrd_client_message(crm_client_t *client, xmlNode *xml)
         send_attrd_message(NULL, xml);
     }
 }
-
+/* CPGメッセージ処理 */
 void
 attrd_peer_message(crm_node_t *peer, xmlNode *xml)
 {
@@ -263,9 +267,11 @@ attrd_peer_message(crm_node_t *peer, xmlNode *xml)
     const char *election_op = crm_element_value(xml, F_CRM_TASK);
 
     if(election_op) {
+		/* ELECTIONメッセージの場合 */
         enum election_result rc = 0;
 
         crm_xml_add(xml, F_CRM_HOST_FROM, peer->uname);
+        /* 受信メッセージからELECTION状態を確認して、自ノードのELECTION状態を取得 */
         rc = election_count_vote(writer, xml, TRUE);
         switch(rc) {
             case election_start:
@@ -278,12 +284,15 @@ attrd_peer_message(crm_node_t *peer, xmlNode *xml)
                 peer_writer = strdup(peer->uname);
                 break;
             default:
+            	/* ELECTIONの完了チェック */
+            	/* election_wonになれるノードはここから、attrd_electin_cbにてelection_wonに遷移 */
                 election_check(writer);
                 break;
         }
         return;
 
     } else if(v == NULL) {
+		/* 旧タイプのattrd通信の場合 */
         /* From the non-atomic version */
         if(safe_str_eq(op, "update")) {
             const char *name = crm_element_value(xml, F_ATTRD_ATTRIBUTE);
@@ -311,20 +320,26 @@ attrd_peer_message(crm_node_t *peer, xmlNode *xml)
             }
         }
     }
-
+	/* 送信元のELECTION状態を取得する */
     crm_element_value_int(xml, F_ATTRD_WRITER, &peer_state);
     if(election_state(writer) == election_won
        && peer_state == election_won
        && safe_str_neq(peer->uname, attrd_cluster->uname)) {
+		/* 受信データが他ノードからのelection_wonのメッセージだった場合 */
+		/* -- 自ノードがelection_wonで他ノードからもelection_wonを受信した */
         crm_notice("Detected another attribute writer: %s", peer->uname);
+        /* 再ELECTIONを実行 */
         election_vote(writer);
 
     } else if(peer_state == election_won) {
+		/* 上記のif以外で、自ノードもしくは、他ノードからelection_wonを受信した場合 */
         if(peer_writer == NULL) {
+			/* 送信元をpeer_writerに設定する */
             peer_writer = strdup(peer->uname);
             crm_notice("Recorded attribute writer: %s", peer->uname);
 
         } else if(safe_str_neq(peer->uname, peer_writer)) {
+			/* peer_writerが変わった場合は、送信元をpeer_writerに再設定する */
             crm_notice("Recorded new attribute writer: %s (was %s)", peer->uname, peer_writer);
             free(peer_writer);
             peer_writer = strdup(peer->uname);
@@ -332,7 +347,7 @@ attrd_peer_message(crm_node_t *peer, xmlNode *xml)
     }
 
     if(safe_str_eq(op, "update")) {
-        attrd_peer_update(peer, xml, FALSE);
+        attrd_peer_update(peer, xml, FALSE);	/* "update"メッセージ処理 */
 
     } else if(safe_str_eq(op, "sync")) {
         attrd_peer_sync(peer, xml);
@@ -399,7 +414,7 @@ attrd_peer_remove(const char *host, const char *source)
     /* if this matches a remote peer, it will be removed from the cache */
     crm_remote_peer_cache_remove(host);
 }
-
+/* "update",""sync-response"メッセージ処理 */
 void
 attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
 {
@@ -409,16 +424,18 @@ attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
     const char *host = crm_element_value(xml, F_ATTRD_HOST);
     const char *attr = crm_element_value(xml, F_ATTRD_ATTRIBUTE);
     const char *value = crm_element_value(xml, F_ATTRD_VALUE);
-
+	/* 自ノードのattributesハッシュテーブルに属性が存在するか検索する */
     attribute_t *a = g_hash_table_lookup(attributes, attr);
 
     if(a == NULL) {
+		/* 存在しない場合は、データを生成する */
         a = create_attribute(xml);
     }
-
+	/* attributesハッシュテーブルデータのvaluesハッシュテーブルにホストが存在するか検索する */
     v = g_hash_table_lookup(a->values, host);
 
     if(v == NULL) {
+		/* 存在しない場合は、valuesハッシュテーブルに属性を追加する */
         crm_trace("Setting %s[%s] to %s from %s", attr, host, value, peer->uname);
         v = calloc(1, sizeof(attribute_value_t));
         if(value) {
@@ -437,6 +454,9 @@ attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
     } else if(filter
               && safe_str_neq(v->current, value)
               && safe_str_eq(host, attrd_cluster->uname)) {
+		/* ホストが存在した場合で、"sync-response"メッセージ(filterがTRUE)で、*/
+		/* 値が変わった場合で、自ノードの値変更の場合は、*/
+		/* 値を変更せずに、クラスタに"sync-response"メッセージを送信する */
         xmlNode *sync = create_xml_node(NULL, __FUNCTION__);
         crm_notice("%s[%s]: local value '%s' takes priority over '%s' from %s",
                    a->id, host, v->current, value, peer->uname);
@@ -450,6 +470,7 @@ attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
         free_xml(sync);
 
     } else if(safe_str_neq(v->current, value)) {
+		/* その他の場合で、ホストが存在した場合で、値が変わった場合は、値を変更する */
         crm_info("Setting %s[%s]: %s -> %s from %s", attr, host, v->current, value, peer->uname);
         free(v->current);
         if(value) {
@@ -472,6 +493,7 @@ attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
             crm_node_t *peer = crm_get_peer(v->nodeid, host);
             crm_trace("We know %s's node id now: %s", peer->uname, peer->uuid);
             if(election_state(writer) == election_won) {
+				/* 自ノードがelection_wonなら、属性を更新する */
                 write_attributes(FALSE, TRUE);
                 return;
             }
@@ -493,12 +515,15 @@ write_or_elect_attribute(attribute_t *a)
 {
     enum election_result rc = election_state(writer);
     if(rc == election_won) {
+		/* 属性を更新する */
         write_attribute(a);
 
     } else if(rc == election_in_progress) {
+		/* ELECTION中の場合は更新しない */
         crm_trace("Election in progress to determine who will write out %s", a->id);
 
     } else if(peer_writer == NULL) {
+		/* peer_writerが決定していない場合は、ELECTIONする */
         crm_info("Starting an election to determine who will write out %s", a->id);
         election_vote(writer);
 
@@ -506,12 +531,12 @@ write_or_elect_attribute(attribute_t *a)
         crm_trace("%s will write out %s, we are in state %d", peer_writer, a->id, rc);
     }
 }
-
+/* ELECTIONコールバック */
 gboolean
 attrd_election_cb(gpointer user_data)
 {
     crm_trace("Election complete");
-
+	/* WRITERに自ノード名をセット */
     free(peer_writer);
     peer_writer = strdup(attrd_cluster->uname);
 
@@ -538,6 +563,7 @@ attrd_peer_change_cb(enum crm_status_type kind, crm_node_t *peer, const void *da
 
         attrd_peer_remove(peer->uname, __FUNCTION__);
         if(peer_writer && safe_str_eq(peer->uname, peer_writer)) {
+			/* peer_writerのノードがクラスタから消失した場合 */
             free(peer_writer);
             peer_writer = NULL;
             crm_notice("Lost attribute writer %s", peer->uname);
@@ -716,7 +742,7 @@ write_attribute(attribute_t *a)
     a->changed = FALSE;
     a->unknown_peer_uuids = FALSE;
     xml_top = create_xml_node(NULL, XML_CIB_TAG_STATUS);
-
+	/* すべてのノードの属性情報を処理する */
     g_hash_table_iter_init(&iter, a->values);
     while (g_hash_table_iter_next(&iter, NULL, (gpointer *) & v)) {
         crm_node_t *peer = crm_get_peer_full(v->nodeid, v->nodename, CRM_GET_PEER_REMOTE|CRM_GET_PEER_CLUSTER);
@@ -727,15 +753,18 @@ write_attribute(attribute_t *a)
         }
 
         if (peer == NULL) {
+			/* クラスタに存在しないノードの属性は積み上げない */
             /* If the user is trying to set an attribute on an unknown peer, ignore it. */
             crm_notice("Update error (peer not found): %s[%s]=%s failed (host=%p)", v->nodename, a->id, v->current, peer);
 
         } else if (peer->uuid == NULL) {
+			/* UUIDが決定していないノードの属性は積み上げない */
             /* peer is found, but we don't know the uuid yet. Wait until we discover a new uuid before attempting to write */
             a->unknown_peer_uuids = FALSE;
             crm_notice("Update error (unknown peer uuid, retry will be attempted once uuid is discovered): %s[%s]=%s failed (host=%p)", v->nodename, a->id, v->current, peer);
 
         } else {
+			/* ノードの更新属性データを積み上げる */
             crm_debug("Update: %s[%s]=%s (%s %u %u %s)", v->nodename, a->id, v->current, peer->uuid, peer->id, v->nodeid, peer->uname);
             build_update_element(xml_top, a, peer->uuid, v->current);
             updates++;
@@ -763,7 +792,7 @@ write_attribute(attribute_t *a)
 
         crm_notice("Sent update %d with %d changes for %s, id=%s, set=%s",
                    a->update, updates, a->id, a->uuid ? a->uuid : "<n/a>", a->set);
-
+		/* CIB更新コールバックをセット */
         the_cib->cmds->register_callback(
             the_cib, a->update, 120, FALSE, strdup(a->id), "attrd_cib_callback", attrd_cib_callback);
     }

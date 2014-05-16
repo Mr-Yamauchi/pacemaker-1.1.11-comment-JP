@@ -1891,7 +1891,7 @@ crmd_ipc_server_init(struct qb_ipcs_service_handlers *cb)
 {
     return mainloop_add_ipc_server(CRM_SYSTEM_CRMD, QB_IPC_NATIVE, cb);
 }
-
+/* IPCƒT[ƒoˆ—‚Ì‰Šú‰» */
 void
 attrd_ipc_server_init(qb_ipcs_service_t **ipcs, struct qb_ipcs_service_handlers *cb)
 {

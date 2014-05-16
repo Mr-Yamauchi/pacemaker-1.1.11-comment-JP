@@ -60,7 +60,7 @@ attrd_shutdown(int nsig) {
         crm_exit(pcmk_ok);
     }
 }
-
+/* CPGメッセージコールバック */
 static void
 attrd_cpg_dispatch(cpg_handle_t handle,
                  const struct cpg_name *groupName,
@@ -76,14 +76,16 @@ attrd_cpg_dispatch(cpg_handle_t handle,
     }
 
     if (kind == crm_class_cluster) {
+		/* 受信データをXML変換 */
         xml = string2xml(data);
     }
 
     if (xml == NULL) {
         crm_err("Bad message of class %d received from %s[%u]: '%.120s'", kind, from, nodeid, data);
     } else {
+		/* クラスタ接続情報から、送信元ノード情報をセット */
         crm_node_t *peer = crm_get_peer(nodeid, from);
-
+		/* CPGメッセージ処理 */
         attrd_peer_message(peer, xml);
     }
 
@@ -202,7 +204,7 @@ attrd_ipc_created(qb_ipcs_connection_t * c)
 {
     crm_trace("Connection %p", c);
 }
-
+/* IPC受信コールバック */
 static int32_t
 attrd_ipc_dispatch(qb_ipcs_connection_t * c, void *data, size_t size)
 {
@@ -222,7 +224,7 @@ attrd_ipc_dispatch(qb_ipcs_connection_t * c, void *data, size_t size)
 
     crm_trace("Processing msg from %d (%p)", crm_ipcs_client_pid(c), c);
     crm_log_xml_trace(xml, __PRETTY_FUNCTION__);
-
+	/* IPCクライアントメッセージ処理 */
     attrd_client_message(client, xml);
 
     free_xml(xml);
@@ -249,7 +251,7 @@ attrd_ipc_destroy(qb_ipcs_connection_t * c)
     crm_trace("Connection %p", c);
     attrd_ipc_closed(c);
 }
-
+/* IPCコールバック情報 */
 struct qb_ipcs_service_handlers ipc_callbacks = {
     .connection_accept = attrd_ipc_accept,
     .connection_created = attrd_ipc_created,
@@ -311,8 +313,9 @@ main(int argc, char **argv)
     }
 
     crm_info("Starting up");
+    /* 属性ハッシュテーブルの生成 */
     attributes = g_hash_table_new_full(crm_str_hash, g_str_equal, NULL, free_attribute);
-
+	/* CPG接続コールバックセット */
     attrd_cluster = malloc(sizeof(crm_cluster_t));
 
     attrd_cluster->destroy = attrd_cpg_destroy;
@@ -320,18 +323,19 @@ main(int argc, char **argv)
     attrd_cluster->cpg.cpg_confchg_fn = pcmk_cpg_membership;
 
     crm_set_status_callback(attrd_peer_change_cb);
-
+	/* corosync/CPGへの接続 */
     if (crm_cluster_connect(attrd_cluster) == FALSE) {
         crm_err("Cluster connection failed");
         rc = DAEMON_RESPAWN_STOP;
         goto done;
     }
     crm_info("Cluster connection active");
-
+	/* ELECTIONの初期化(ELECTIONコールバックセット) */
     writer = election_init(T_ATTRD, attrd_cluster->uname, 120000, attrd_election_cb);
+    /* IPCサーバ処理の初期化(IPCコールバックセット) */
     attrd_ipc_server_init(&ipcs, &ipc_callbacks);
     crm_info("Accepting attribute updates");
-
+	/* CIBとの接続 */
     the_cib = attrd_cib_connect(10);
     if (the_cib == NULL) {
         rc = DAEMON_RESPAWN_STOP;
@@ -339,6 +343,7 @@ main(int argc, char **argv)
     }
 
     crm_info("CIB connection active");
+    /* g_mainループスタート */
     g_main_run(mloop);
 
   done:
