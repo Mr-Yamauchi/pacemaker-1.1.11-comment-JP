@@ -284,7 +284,7 @@ main(int argc, char **argv)
     crm_set_options(NULL, "[options]", long_options,
                     "Daemon for aggregating and atomically storing node attribute updates into the CIB");
 
-    mainloop_add_signal(SIGTERM, attrd_shutdown);
+    mainloop_add_signal(SIGTERM, attrd_shutdown);	/* SIGTERMハンドラセット */
 
      while (1) {
         flag = crm_get_option(argc, argv, &index);
@@ -348,7 +348,7 @@ main(int argc, char **argv)
 
   done:
     crm_notice("Cleaning up before exit");
-
+	/* ---終了処理--- */
     election_fini(writer);
     crm_client_disconnect_all(ipcs);
     qb_ipcs_destroy(ipcs);

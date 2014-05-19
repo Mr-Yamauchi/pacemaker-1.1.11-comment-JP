@@ -66,7 +66,7 @@ void write_or_elect_attribute(attribute_t *a);
 void attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter);
 void attrd_peer_sync(crm_node_t *peer, xmlNode *xml);
 void attrd_peer_remove(const char *host, const char *source);
-
+/* クラスタにメッセージを送信する */
 static gboolean
 send_attrd_message(crm_node_t * node, xmlNode * data)
 {
@@ -77,16 +77,17 @@ send_attrd_message(crm_node_t * node, xmlNode * data)
 
     return send_cluster_message(node, crm_msg_attrd, data, TRUE);
 }
-
+/* dampenタイマーコールバック */
 static gboolean
 attribute_timer_cb(gpointer data)
 {
     attribute_t *a = data;
     crm_trace("Dampen interval expired for %s in state %d", a->id, election_state(writer));
+    /* 属性更新 or Electionの実行 */
     write_or_elect_attribute(a);
     return FALSE;
 }
-
+/* 属性データ解放 */
 static void
 free_attribute_value(gpointer data)
 {
@@ -98,7 +99,7 @@ free_attribute_value(gpointer data)
     free(v->stored);
     free(v);
 }
-
+/* 属性データ解放 */
 void
 free_attribute(gpointer data)
 {
@@ -115,7 +116,7 @@ free_attribute(gpointer data)
         free(a);
     }
 }
-
+/* 属性データから送信XMLデータを生成する */
 xmlNode *
 build_attribute_xml(
     xmlNode *parent, const char *name, const char *set, const char *uuid, unsigned int timeout_ms, const char *user,
@@ -134,14 +135,14 @@ build_attribute_xml(
 
     return xml;
 }
-
+/* 属性更新データを生成する */
 static attribute_t *
 create_attribute(xmlNode *xml)
 {
     int dampen = 0;
     const char *value = crm_element_value(xml, F_ATTRD_DAMPEN);
     attribute_t *a = calloc(1, sizeof(attribute_t));
-
+	/* 属性データをエリアにセット */
     a->id      = crm_element_value_copy(xml, F_ATTRD_ATTRIBUTE);
     a->set     = crm_element_value_copy(xml, F_ATTRD_SET);
     a->uuid    = crm_element_value_copy(xml, F_ATTRD_KEY);
@@ -160,10 +161,11 @@ create_attribute(xmlNode *xml)
     }
 
     if(dampen > 0) {
+		/* dampenが設定されている場合は、属性更新のタイマー（とコールバック）を仕掛ける */
         a->timeout_ms = dampen;
         a->timer = mainloop_timer_add(strdup(a->id), a->timeout_ms, FALSE, attribute_timer_cb, a);
     }
-
+	/* attributesハッシュテーブルに生成したデータを登録 */
     g_hash_table_replace(attributes, a->id, a);
     return a;
 }
@@ -195,6 +197,7 @@ attrd_client_message(crm_client_t *client, xmlNode *xml)
         a = g_hash_table_lookup(attributes, attr);
 
         if(host == NULL) {
+			/* attrd_updaterなどからの処理で、F_ATTRD_HOSTが未設定の場合に、F_ATTRD_HOSTとF_ATTRD_HOST_IDをセットする */
             crm_trace("Inferring host");
             host = strdup(attrd_cluster->uname);
             crm_xml_add(xml, F_ATTRD_HOST, host);
@@ -254,6 +257,7 @@ attrd_client_message(crm_client_t *client, xmlNode *xml)
     }
 
     if(broadcast) {
+        /* クラスタにメッセージを送信する */
         send_attrd_message(NULL, xml);
     }
 }
@@ -306,6 +310,7 @@ attrd_peer_message(crm_node_t *peer, xmlNode *xml)
 
             if(a) {
                 crm_trace("Compatibility write-out of %s for %s from %s", a->id, op, peer->uname);
+                /* 属性更新 or Electionの実行 */
                 write_or_elect_attribute(a);
             }
 
@@ -316,6 +321,7 @@ attrd_peer_message(crm_node_t *peer, xmlNode *xml)
             g_hash_table_iter_init(&aIter, attributes);
             while (g_hash_table_iter_next(&aIter, NULL, (gpointer *) & a)) {
                 crm_trace("Compatibility write-out of %s for %s from %s", a->id, op, peer->uname);
+                /* 属性更新 or Electionの実行 */
                 write_or_elect_attribute(a);
             }
         }
@@ -350,13 +356,13 @@ attrd_peer_message(crm_node_t *peer, xmlNode *xml)
         attrd_peer_update(peer, xml, FALSE);	/* "update"メッセージ処理 */
 
     } else if(safe_str_eq(op, "sync")) {
-        attrd_peer_sync(peer, xml);
+        attrd_peer_sync(peer, xml);				/* "sync"メッセージ受信処理("sync-response"メッセージを応答する) */
 
-    } else if(safe_str_eq(op, "peer-remove")) {
+    } else if(safe_str_eq(op, "peer-remove")) { /* "peer-remove"メッセージ処理 */
         const char *host = crm_element_value(xml, F_ATTRD_HOST);
         attrd_peer_remove(host, peer->uname);
 
-    } else if(safe_str_eq(op, "sync-response")
+    } else if(safe_str_eq(op, "sync-response")	/* "sync-response"メッセージ処理 */
               && safe_str_neq(peer->uname, attrd_cluster->uname)) {
         xmlNode *child = NULL;
 
@@ -366,7 +372,7 @@ attrd_peer_message(crm_node_t *peer, xmlNode *xml)
         }
     }
 }
-
+/* "sync"メッセージ受信処理("sync-response"メッセージを応答する) */
 void
 attrd_peer_sync(crm_node_t *peer, xmlNode *xml)
 {
@@ -375,20 +381,24 @@ attrd_peer_sync(crm_node_t *peer, xmlNode *xml)
 
     attribute_t *a = NULL;
     attribute_value_t *v = NULL;
+    /* 応答用xmlノードを生成 */
     xmlNode *sync = create_xml_node(NULL, __FUNCTION__);
-
+	/* "sync-response"メッセージを積み上げる */
     crm_xml_add(sync, F_ATTRD_TASK, "sync-response");
-
+	/* すべてのattributesハッシュテーブルを処理する*/
     g_hash_table_iter_init(&aIter, attributes);
     while (g_hash_table_iter_next(&aIter, NULL, (gpointer *) & a)) {
+        /* attributesハッシュテーブルのvaluesハッシュテーブルをすべて処理する */
         g_hash_table_iter_init(&vIter, a->values);
         while (g_hash_table_iter_next(&vIter, NULL, (gpointer *) & v)) {
             crm_debug("Syncing %s[%s] = %s to %s", a->id, v->nodename, v->current, peer?peer->uname:"everyone");
+            /* 属性データから送信XMLデータを生成する */
             build_attribute_xml(sync, a->id, a->set, a->uuid, a->timeout_ms, a->user, v->nodename, v->nodeid, v->current);
         }
     }
 
     crm_debug("Syncing values to %s", peer?peer->uname:"everyone");
+    /* クラスタに"sync-response"メッセージを送信する */
     send_attrd_message(peer, sync);
     free_xml(sync);
 }
@@ -403,9 +413,10 @@ attrd_peer_remove(const char *host, const char *source)
     if(host == NULL) {
         return;
     }
-
+	/* attributesハッシュテーブル内のすべての属性データを処理する */
     g_hash_table_iter_init(&aIter, attributes);
     while (g_hash_table_iter_next(&aIter, NULL, (gpointer *) & a)) {
+		/* 属性データのvaluesハッシュテーブルから対象ホストのデータを削除する */
         if(g_hash_table_remove(a->values, host)) {
             crm_debug("Removed %s[%s] for %s", a->id, host, source);
         }
@@ -414,7 +425,7 @@ attrd_peer_remove(const char *host, const char *source)
     /* if this matches a remote peer, it will be removed from the cache */
     crm_remote_peer_cache_remove(host);
 }
-/* "update",""sync-response"メッセージ処理 */
+/* "update","sync-response"メッセージ処理 */
 void
 attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
 {
@@ -428,14 +439,14 @@ attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
     attribute_t *a = g_hash_table_lookup(attributes, attr);
 
     if(a == NULL) {
-		/* 存在しない場合は、データを生成する */
+		/* 存在しない場合は、属性更新データを生成して、attributesハッシュテーブルに属性を追加する */
         a = create_attribute(xml);
     }
 	/* attributesハッシュテーブルデータのvaluesハッシュテーブルにホストが存在するか検索する */
     v = g_hash_table_lookup(a->values, host);
 
     if(v == NULL) {
-		/* 存在しない場合は、valuesハッシュテーブルに属性を追加する */
+		/* 属性データに対象ホストが存在しない場合は、valuesハッシュテーブルに属性を追加する */
         crm_trace("Setting %s[%s] to %s from %s", attr, host, value, peer->uname);
         v = calloc(1, sizeof(attribute_value_t));
         if(value) {
@@ -443,6 +454,7 @@ attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
         }
         v->nodename = strdup(host);
         crm_element_value_int(xml, F_ATTRD_IS_REMOTE, &v->is_remote);
+        /* 属性データのvaluesハッシュテーブルに生成したデータを登録する */
         g_hash_table_replace(a->values, v->nodename, v);
 
         if (v->is_remote == TRUE) {
@@ -454,23 +466,27 @@ attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
     } else if(filter
               && safe_str_neq(v->current, value)
               && safe_str_eq(host, attrd_cluster->uname)) {
-		/* ホストが存在した場合で、"sync-response"メッセージ(filterがTRUE)で、*/
-		/* 値が変わった場合で、自ノードの値変更の場合は、*/
-		/* 値を変更せずに、クラスタに"sync-response"メッセージを送信する */
+		/* "sync-response"メッセージ(filterがTRUE)で、*/
+		/* 自ノードの値変更の場合で、受信した値と保持している値が異なる場合は、*/
+		/* 値を変更せずに、クラスタに現在の値を"sync-response"メッセージで送信する */
+		/* ---他ノード保持値が間違っている場合の同期通信 ---*/
         xmlNode *sync = create_xml_node(NULL, __FUNCTION__);
         crm_notice("%s[%s]: local value '%s' takes priority over '%s' from %s",
                    a->id, host, v->current, value, peer->uname);
 
         crm_xml_add(sync, F_ATTRD_TASK, "sync-response");
         v = g_hash_table_lookup(a->values, host);
+		/* 属性データから送信XMLデータを生成する */
         build_attribute_xml(sync, a->id, a->set, a->uuid, a->timeout_ms, a->user, v->nodename, v->nodeid, v->current);
 
         crm_xml_add_int(sync, F_ATTRD_WRITER, election_state(writer));
+        /* クラスタにメッセージを送信する */
         send_attrd_message(peer, sync);
         free_xml(sync);
 
     } else if(safe_str_neq(v->current, value)) {
 		/* その他の場合で、ホストが存在した場合で、値が変わった場合は、値を変更する */
+		/* --他ノードのデータの場合で値が異なる場合が該当 --- */
         crm_info("Setting %s[%s]: %s -> %s from %s", attr, host, v->current, value, peer->uname);
         free(v->current);
         if(value) {
@@ -481,6 +497,7 @@ attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
         changed = TRUE;
 
     } else {
+		/* その他の場合(ホストと値が変わらない場合) */
         crm_trace("Unchanged %s[%s] from %s is %s", attr, host, peer->uname, value);
     }
 
@@ -488,7 +505,10 @@ attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
 
     /* this only involves cluster nodes. */
     if(v->nodeid == 0 && (v->is_remote == FALSE)) {
+		/* 初期属性作成時で、リモート以外の場合 */
+		/* 2回目の更新では、v->nodeidが取得設定されているので実行されないので注意 */
         if(crm_element_value_int(xml, F_ATTRD_HOST_ID, (int*)&v->nodeid) == 0) {
+			/* 受信メッセージのF_ATTRD_HOST_IDをv->nodeidに取得する */
             /* Create the name/id association */
             crm_node_t *peer = crm_get_peer(v->nodeid, host);
             crm_trace("We know %s's node id now: %s", peer->uname, peer->uuid);
@@ -505,11 +525,12 @@ attrd_peer_update(crm_node_t *peer, xmlNode *xml, bool filter)
             crm_trace("Delayed write out (%dms) for %s", a->timeout_ms, a->id);
             mainloop_timer_start(a->timer);
         } else {
+			/* 属性更新 or Electionの実行 */
             write_or_elect_attribute(a);
         }
     }
 }
-
+/* 属性更新 or Electionの実行 */
 void
 write_or_elect_attribute(attribute_t *a)
 {
@@ -541,6 +562,7 @@ attrd_election_cb(gpointer user_data)
     peer_writer = strdup(attrd_cluster->uname);
 
     /* Update the peers after an election */
+    /* "sync"メッセージ受信処理("sync-response"メッセージを応答する) */
     attrd_peer_sync(NULL, NULL);
 
     /* Update the CIB after an election */
@@ -555,7 +577,7 @@ attrd_peer_change_cb(enum crm_status_type kind, crm_node_t *peer, const void *da
     if(election_state(writer) == election_won
         && kind == crm_status_nstate
         && safe_str_eq(peer->state, CRM_NODE_MEMBER)) {
-
+		/* "sync"メッセージ受信処理("sync-response"メッセージを応答する) */
         attrd_peer_sync(peer, NULL);
 
     } else if(kind == crm_status_nstate
@@ -564,6 +586,7 @@ attrd_peer_change_cb(enum crm_status_type kind, crm_node_t *peer, const void *da
         attrd_peer_remove(peer->uname, __FUNCTION__);
         if(peer_writer && safe_str_eq(peer->uname, peer_writer)) {
 			/* peer_writerのノードがクラスタから消失した場合 */
+			/* peer_writerをクリアして、再electionを指示 */
             free(peer_writer);
             peer_writer = NULL;
             crm_notice("Lost attribute writer %s", peer->uname);
@@ -577,7 +600,7 @@ attrd_peer_change_cb(enum crm_status_type kind, crm_node_t *peer, const void *da
         }
     }
 }
-
+/* CIB更新コールバック */
 static void
 attrd_cib_callback(xmlNode * msg, int call_id, int rc, xmlNode * output, void *user_data)
 {
@@ -590,6 +613,7 @@ attrd_cib_callback(xmlNode * msg, int call_id, int rc, xmlNode * output, void *u
     attribute_t *a = g_hash_table_lookup(attributes, name);
 
     if(a == NULL) {
+		/* 存在しない属性のCIB更新コールバック実行だった場合は、無視する */
         crm_info("Attribute %s no longer exists", name);
         goto done;
     }
@@ -612,19 +636,21 @@ attrd_cib_callback(xmlNode * msg, int call_id, int rc, xmlNode * output, void *u
             level = LOG_WARNING;
             break;
     }
-
+	/* 更新ログを出力 */
     do_crm_log(level, "Update %d for %s: %s (%d)", call_id, name, pcmk_strerror(rc), rc);
-
+	/* attributesテーブル内の更新データのvaluesハッシュテーブルをすべて処理する */
     g_hash_table_iter_init(&iter, a->values);
     while (g_hash_table_iter_next(&iter, (gpointer *) & peer, (gpointer *) & v)) {
         crm_notice("Update %d for %s[%s]=%s: %s (%d)", call_id, a->id, peer, v->requested, pcmk_strerror(rc), rc);
 
         if(rc == pcmk_ok) {
+			/* 更新OKだった場合は、requested値で、stored値を更新し、requested値をクリア*/
             free(v->stored);
             v->stored = v->requested;
             v->requested = NULL;
 
         } else {
+			/* 更新失敗だった場合は、requested値をクリアし、再実行の為に、changedをTRUEにセット */
             free(v->requested);
             v->requested = NULL;
             a->changed = TRUE; /* Attempt write out again */
@@ -633,10 +659,11 @@ attrd_cib_callback(xmlNode * msg, int call_id, int rc, xmlNode * output, void *u
   done:
     free(name);
     if(a && a->changed && election_state(writer) == election_won) {
+		/* 存在する更新データの更新通知で、再実行が必要で、自ノードがelection_wonの場合は、属性を再更新する */
         write_attribute(a);
     }
 }
-
+/* すべての属性データ(attributesハッシュテーブル内の全データ)を更新する */
 void
 write_attributes(bool all, bool peer_discovered)
 {
@@ -657,7 +684,7 @@ write_attributes(bool all, bool peer_discovered)
         }
     }
 }
-
+/* cibの属性更新データを生成する */
 static void
 build_update_element(xmlNode *parent, attribute_t *a, const char *nodeid, const char *value)
 {
@@ -710,7 +737,7 @@ build_update_element(xmlNode *parent, attribute_t *a, const char *nodeid, const 
     g_free(uuid);
     g_free(set);
 }
-
+/* 単一属性(attributesハッシュテーブル内のvalueハッシュテーブル)を更新する */
 void
 write_attribute(attribute_t *a)
 {
@@ -742,12 +769,13 @@ write_attribute(attribute_t *a)
     a->changed = FALSE;
     a->unknown_peer_uuids = FALSE;
     xml_top = create_xml_node(NULL, XML_CIB_TAG_STATUS);
-	/* すべてのノードの属性情報を処理する */
+	/* すべてのノードの属性情報(valuesハッシュテーブルデータ)を処理する */
     g_hash_table_iter_init(&iter, a->values);
     while (g_hash_table_iter_next(&iter, NULL, (gpointer *) & v)) {
         crm_node_t *peer = crm_get_peer_full(v->nodeid, v->nodename, CRM_GET_PEER_REMOTE|CRM_GET_PEER_CLUSTER);
 
         if(peer && peer->id && v->nodeid == 0) {
+			/* nodeidを更新する */
             crm_trace("Updating value's nodeid");
             v->nodeid = peer->id;
         }
@@ -766,7 +794,9 @@ write_attribute(attribute_t *a)
         } else {
 			/* ノードの更新属性データを積み上げる */
             crm_debug("Update: %s[%s]=%s (%s %u %u %s)", v->nodename, a->id, v->current, peer->uuid, peer->id, v->nodeid, peer->uname);
+            /* cibの属性更新データを生成する */
             build_update_element(xml_top, a, peer->uuid, v->current);
+            /* 更新データカウントアップ */
             updates++;
 
             free(v->requested);
@@ -784,9 +814,9 @@ write_attribute(attribute_t *a)
         }
     }
 
-    if(updates) {
+    if(updates) {	/* 更新データがあった場合 */
         crm_log_xml_trace(xml_top, __FUNCTION__);
-
+		/* 更新データでCIBデータを更新 */
         a->update = cib_internal_op(the_cib, CIB_OP_MODIFY, NULL, XML_CIB_TAG_STATUS, xml_top, NULL,
                                     flags, a->user);
 
