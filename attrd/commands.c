@@ -570,7 +570,7 @@ attrd_election_cb(gpointer user_data)
     return FALSE;
 }
 
-
+/* クラスタ接続状態変更コールバック */
 void
 attrd_peer_change_cb(enum crm_status_type kind, crm_node_t *peer, const void *data)
 {
