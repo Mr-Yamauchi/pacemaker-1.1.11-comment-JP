@@ -159,7 +159,7 @@ master_update_pseudo_status(resource_t * rsc, gboolean * demoting, gboolean * pr
 	}								\
     }									\
     } while(0)
-
+/* マスターにPromote可能かチェックする */
 static node_t *
 can_be_master(resource_t * rsc)
 {
@@ -174,27 +174,29 @@ can_be_master(resource_t * rsc)
     role = rsc->fns->state(rsc, FALSE);
     crm_info("%s role: %s", rsc->id, role2text(role));
 #endif
-
+	/* 子リソースを全て処理する */
     if (rsc->children) {
         GListPtr gIter = rsc->children;
 
         for (; gIter != NULL; gIter = gIter->next) {
             resource_t *child = (resource_t *) gIter->data;
-
+			/* 子リソースがMasterにPromote可能かチェックする */
             if (can_be_master(child) == NULL) {
                 pe_rsc_trace(rsc, "Child %s of %s can't be promoted", child->id, rsc->id);
                 return NULL;
             }
         }
     }
-
+	/* 子リソースの配置先ノード情報(allocated_to)を取得する */
     node = rsc->fns->location(rsc, NULL, FALSE);
     if (node == NULL) {
         pe_rsc_trace(rsc, "%s cannot be master: not allocated", rsc->id);
         return NULL;
 
     } else if (is_not_set(rsc->flags, pe_rsc_managed)) {
+		/* unmanagedリソースの場合 */
         if (rsc->fns->state(rsc, TRUE) == RSC_ROLE_MASTER) {
+			/* Masterに昇格していいるリソースならそのままにする */
             crm_notice("Forcing unmanaged master %s to remain promoted on %s",
                        rsc->id, node->details->uname);
 
@@ -207,25 +209,28 @@ can_be_master(resource_t * rsc)
         return NULL;
 
     } else if (can_run_resources(node) == FALSE) {
+		/* 子リソースの配置先ノードでリソースが起動不可なら配置不可 */
         crm_trace("Node cant run any resources: %s", node->details->uname);
         return NULL;
     }
-
+	/* 親のCloneリソース情報を取り出し、親の配置候補ノード情報から子リソースの配置先ノードを検索する */
     get_clone_variant_data(clone_data, parent);
     local_node = pe_hash_table_lookup(parent->allowed_nodes, node->details->id);
 
     if (local_node == NULL) {
+		/* 親の配置候補ノードに含まれない場合は、配置不可 */
         crm_err("%s cannot run on %s: node not allowed", rsc->id, node->details->uname);
         return NULL;
 
     } else if (local_node->count < clone_data->master_node_max
                || is_not_set(rsc->flags, pe_rsc_managed)) {
+		/* 配置数がまだmax未満で、unmanagedリソース(promote済)なら子リソースの配置先ノード先を返す */
         return local_node;
 
     } else {
         pe_rsc_trace(rsc, "%s cannot be master on %s: node full", rsc->id, node->details->uname);
     }
-
+	/*配置不可 */
     return NULL;
 }
 
@@ -517,7 +522,7 @@ master_score(resource_t * rsc, node_t * node, int not_set_value)
          */
         name = rsc->clone_name;
     }
-
+	/* リソースのmaster-xxxx属性を検索 */
     len = 8 + strlen(name);
     attr_name = calloc(1, len);
     sprintf(attr_name, "master-%s", name);
@@ -529,6 +534,7 @@ master_score(resource_t * rsc, node_t * node, int not_set_value)
     }
 
     if (attr_value != NULL) {
+		/* 属性値をスコアにセット */
         score = char2score(attr_value);
     }
 
@@ -774,7 +780,7 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
     for (; gIter != NULL; gIter = gIter->next) {
         resource_t *child_rsc = (resource_t *) gIter->data;
         char *score = score2char(child_rsc->sort_index);
-
+		/* 子リソースの配置先ノード情報(allocated_to)を取得する */
         chosen = child_rsc->fns->location(child_rsc, NULL, FALSE);
         if (show_scores) {
             fprintf(stdout, "%s promotion score on %s: %s\n",
@@ -794,12 +800,14 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
             pe_rsc_trace(rsc, "Not supposed to promote child: %s", child_rsc->id);
 
         } else if (promoted < clone_data->master_max || is_not_set(rsc->flags, pe_rsc_managed)) {
+			/* 子リソースがマスターにPromote可能かチェックして、ノード情報を取得する */
             chosen = can_be_master(child_rsc);
         }
 
         pe_rsc_debug(rsc, "%s master score: %d", child_rsc->id, child_rsc->priority);
 
         if (chosen == NULL) {
+			/* ロールをSLAVEにセット */
             set_role_slave(child_rsc, FALSE);
             continue;
         }
@@ -807,7 +815,8 @@ master_color(resource_t * rsc, node_t * prefer, pe_working_set_t * data_set)
         chosen->count++;
         pe_rsc_info(rsc, "Promoting %s (%s %s)",
                     child_rsc->id, role2text(child_rsc->role), chosen->details->uname);
-        set_role_master(child_rsc);
+        /* ロールをMASTERにセット */
+        set_role_master(child_rsc);	
         promoted++;
     }
 
